@@ -1,56 +1,81 @@
+/*
+** client.c -- a stream socket client demo
+*/
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
 #include <netdb.h>
-#define SERVER_PORT 5432
-#define MAX_LINE 256
-int main(int argc, char * argv[])
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#define PORT "3490" // the port client will be connecting to
+#define MAXDATASIZE 100 // max number of bytes we can get at once
+
+// get sockaddr, IPv4 or IPv6:
+void *get_in_addr(struct sockaddr *sa)
 {
-	FILE *fp;
-	struct hostent *hp;
-	struct sockaddr_in sin;
-	char *host;
-	char buf[MAX_LINE];
-	int s;
-	int len;
-	if (argc==2) {
-		host = argv[1];
-	}
-	else {
-		fprintf(stderr, "usage: simplex-talk host\n");
-		exit(1);
-	}
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+int main(int argc, char *argv[])
+{
+    int sockfd, numbytes;
+    char buf[MAXDATASIZE];
+    struct addrinfo hints, *servinfo, *p;
+    int rv;
+    char s[INET6_ADDRSTRLEN];
 
-	/* translate host name into peer's IP address */
-	hp = gethostbyname(host);
-	if (!hp) {
-		fprintf(stderr, "simplex-talk: unknown host: %s\n", host);
-		exit(1);
-	}
+    if (argc != 2) {
+        fprintf(stderr,"usage: client hostname\n");
+        exit(1);
+    }
 
-	/* build address data structure */
-	bzero((char *)&sin, sizeof(sin));
-	sin.sin_family = AF_INET;
-	bcopy(hp->h_addr, (char *)&sin.sin_addr, hp->h_length);
-	sin.sin_port = htons(SERVER_PORT);
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
 
-	/* active open */
-	if ((s = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("simplex-talk: socket");
-		exit(1);
-	}
-	if (connect(s, (struct sockaddr *)&sin, sizeof(sin)) < 0)
-	{
-		perror("simplex-talk: connect");
-		close(s);
-		exit(1);
-	}
-	
-	/* main loop: get and send lines of text */
-	while (fgets(buf, sizeof(buf), stdin)) {
-		buf[MAX_LINE-1] = '\0';
-		len = strlen(buf) + 1;
-		send(s, buf, len, 0);
-	}
+    if ((rv = getaddrinfo(argv[1], PORT, &hints, &servinfo)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        return 1;
+    }
+
+    // loop through all the results and connect to the first we can
+    for(p = servinfo; p != NULL; p = p->ai_next) {
+        if ((sockfd = socket(p->ai_family, p->ai_socktype,
+             p->ai_protocol)) == -1) {
+                perror("client: socket");
+                continue;
+        }
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(sockfd);
+            perror("client: connect");
+            continue;
+        }
+        break;
+    }
+
+    if (p == NULL) {
+        fprintf(stderr, "client: failed to connect\n");
+        return 2;
+    }
+
+    inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
+    printf("client: connecting to %s\n", s);
+
+    freeaddrinfo(servinfo); // all done with this structure
+
+    if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
+        perror("recv");
+        exit(1);
+    }
+
+    buf[numbytes] = '\0';
+    printf("client: received '%s'\n",buf);
+    close(sockfd);
+    return 0;
 }
