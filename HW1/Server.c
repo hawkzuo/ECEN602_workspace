@@ -16,6 +16,9 @@
 #define PORT "3490" // the port users will be connecting to
 #define BACKLOG 10 // how many pending connections queue will hold
 #define PROTOCOL "echos"
+#define MAXDATASIZE 100 // max number of bytes we can get at once
+
+
 
 void sigchld_handler(int s)
 {
@@ -35,6 +38,46 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+
+
+
+ssize_t writen(int fd, const void *vptr, size_t n) {
+    size_t nleft;
+    ssize_t nwritten;
+    char *ptr;
+
+    ptr = vptr;
+    nleft = n;
+    while (nleft > 0) {
+        // write is system call
+        if( (nwritten = write(fd, ptr, nleft)) <= 0) {
+            // If error is EINTR, we try looping again
+            if(nwritten <0 && errno == EINTR) {
+                nwritten = 0;
+            } else {
+                // Other error types, will quit
+                return -1;
+            }
+        }
+        nleft -= nwritten;
+        ptr += nwritten;
+    }
+    return n;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 int main(int argc, char** argv)
 {
 	int sockfd, new_fd; // listen on sock_fd, new connection on new_fd
@@ -49,9 +92,9 @@ int main(int argc, char** argv)
 
 	char ip4[INET_ADDRSTRLEN]; 
 
-
-
-
+	// For child process
+	int number_read;
+	char buf[MAXDATASIZE];
 
 
 	/*	This part checks the input format and record the assigned port number		*/
@@ -133,15 +176,32 @@ int main(int argc, char** argv)
 		}
 
 		inet_ntop(their_addr.ss_family,
-							get_in_addr((struct sockaddr *)&their_addr),
-							s, sizeof s);
+				  get_in_addr((struct sockaddr *)&their_addr),
+				  s, sizeof s);
 		printf("server: got connection from %s\n", s);
 		
 		if (!fork()) { // this is the child process
+			// Child process
 			close(sockfd); // child doesn't need the listener
-			if (send(new_fd, "Hello, world!", 13, 0) == -1)
-				perror("send");
+			while(number_read = recv(new_fd, buf, MAXDATASIZE, 0) > 0) {
+		        if((int)writen(new_fd, buf, number_read) != number_read) {
+		            fprintf(stderr, 
+		                "Encounter an error sending lines. Expected:%d\n", number_read);
+		            printf("Closing connection...\n");
+					close(new_fd);
+					printf("Child process ended.\n");
+					exit(0);
+		        } else {
+		            printf("Sent input string %s to the client.\n", buf);
+		        }
+		        buf[0] = '\0';	
+			}
+			if(number_read < 0) {
+				perror("receive");
+			}
+			printf("Closing connection...\n");
 			close(new_fd);
+			printf("Child process ended.\n");
 			exit(0);
 		}
 		close(new_fd); // parent doesn't need this

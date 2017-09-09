@@ -22,6 +22,62 @@ void *get_in_addr(struct sockaddr *sa)
     }
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
+
+ssize_t writen(int fd, const void *vptr, size_t n) {
+    size_t nleft;
+    ssize_t nwritten;
+    char *ptr;
+
+    ptr = vptr;
+    nleft = n;
+    while (nleft > 0) {
+        // write is system call
+        if( (nwritten = write(fd, ptr, nleft)) <= 0) {
+            // If error is EINTR, we try looping again
+            if(nwritten <0 && errno == EINTR) {
+                nwritten = 0;
+            } else {
+                // Other error types, will quit
+                return -1;
+            }
+        }
+        nleft -= nwritten;
+        ptr += nwritten;
+    }
+    return n;
+}
+
+ssize_t readline(int fd, void *vptr, size_t maxlen)
+{
+     ssize_t n, rc;
+     char    c, *ptr;
+     ptr = vptr;
+    for (n = 1; n < maxlen; n++) {
+      again:
+        if ( (rc = read(fd, &c, 1)) == 1) {
+            *ptr++ = c;
+            if (c == '\n')
+                break;          /* newline is stored, like fgets() */
+        } else if (rc == 0) {
+            *ptr = 0;
+            return (n - 1);     /* EOF, n - 1 bytes were read */
+        } else {
+            if (errno == EINTR)
+                goto again;
+            return (-1);        /* error, errno set by read() */
+        }
+    }
+    *ptr = 0;                   /* null terminate like fgets() */
+    return (n);
+}
+
+
+
+
+
+
+
+
 int main(int argc, char *argv[])
 {
     int sockfd, numbytes;
@@ -29,6 +85,11 @@ int main(int argc, char *argv[])
     struct addrinfo hints, *servinfo, *p;
     int rv;
     char s[INET6_ADDRSTRLEN];
+
+    int len;
+
+
+
 
     if (argc != 2) {
         fprintf(stderr,"usage: client hostname\n");
@@ -69,13 +130,29 @@ int main(int argc, char *argv[])
 
     freeaddrinfo(servinfo); // all done with this structure
 
-    if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
-        perror("recv");
-        exit(1);
+
+    /* Now connected */
+    while (fgets(buf, sizeof(buf), stdin)) {
+
+        buf[MAXDATASIZE-1] = '\0';
+        len = strlen(buf) + 1;
+        //  send(s, buf, len, 0);
+        printf("Begin sending\n");
+        if((int)writen(sockfd, buf, len) != len) {
+            fprintf(stderr, 
+                "Encounter an error sending lines. Expected:%d\n", len);
+        } else {
+            printf("Sent input string %s to the server.\n", buf);
+
+        }
+        buf[0] = '\0';
     }
 
-    buf[numbytes] = '\0';
-    printf("client: received '%s'\n",buf);
+    printf("Out of loop.\n");
     close(sockfd);
     return 0;
 }
+
+
+
+
