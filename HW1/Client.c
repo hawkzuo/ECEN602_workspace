@@ -11,7 +11,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#define PORT "3333" // the port client will be connecting to
+#define PORT "5432" // the port client will be connecting to
 #define MAXDATASIZE 100 // max number of bytes we can get at once
 
 // get sockaddr, IPv4 or IPv6:
@@ -47,28 +47,52 @@ ssize_t writen(int fd, const void *vptr, size_t n) {
     return n;
 }
 
-ssize_t readline(int fd, void *vptr, size_t maxlen)
+ssize_t readline(int fd, void *buffer, size_t n)
 {
-     ssize_t n, rc;
-     char    c, *ptr;
-     ptr = vptr;
-    for (n = 1; n < maxlen; n++) {
-      again:
-        if ( (rc = read(fd, &c, 1)) == 1) {
-            *ptr++ = c;
-            if (c == '\n')
-                break;          /* newline is stored, like fgets() */
-        } else if (rc == 0) {
-            *ptr = 0;
-            return (n - 1);     /* EOF, n - 1 bytes were read */
-        } else {
-            if (errno == EINTR)
-                goto again;
-            return (-1);        /* error, errno set by read() */
+    int numRead;                    /* # of bytes fetched by last read() */
+    size_t totRead;                     /* Total bytes read so far */
+    char *bf;
+    char ch;
+
+    if (n <= 0 || buffer == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    printf("readline\n");
+    bf = buffer;                       /* No pointer arithmetic on "void *" */
+
+    totRead = 0;
+    for (;;) {
+        numRead = read(fd, &ch, 1);
+        if (numRead == -1) {
+            printf("%d", -1);
+            if (errno == EINTR) {
+                continue;       /* Interrupted --> restart read() */
+            } else {
+                return -1;              /* Some other error */
+            }        
+        } else if (numRead == 0) {      /* EOF */
+            printf("%d", 0);
+            if (totRead == 0)           /* No bytes read; return 0 */
+                return 0;
+            else                        /* Some bytes read; add '\0' */
+                break;
+
+        } else {                        /* 'numRead' must be 1 if we get here */
+            printf("%d", numRead);
+            if (totRead < n - 1) {      /* Discard > (n - 1) bytes */
+                totRead++;
+                *bf = ch;
+                bf++;
+            }
+   
+            if (ch == '\n')
+                break;
         }
     }
-    *ptr = 0;                   /* null terminate like fgets() */
-    return (n);
+
+    *bf = '\0';
+    return totRead;
 }
 
 
@@ -87,7 +111,7 @@ int main(int argc, char *argv[])
     char s[INET6_ADDRSTRLEN];
 
     int len;
-
+    char bufRecv[MAXDATASIZE];
 
 
 
@@ -145,7 +169,16 @@ int main(int argc, char *argv[])
             printf("Sent input string %s to the server.\n", buf);
 
         }
-        buf[0] = '\0';
+        
+        printf("Begin receiving\n");    
+        if((int)readline(sockfd, bufRecv, MAXDATASIZE) != len-1)  {
+            printf("Received wrong string %s , with length: %d, expected length: %d \n", bufRecv, strlen(bufRecv), len);
+        } else {
+            printf("Received:\n");
+            fputs(bufRecv, stdout);
+        } 
+        memset(&buf, '\0', sizeof buf);
+        memset(&bufRecv, '\0', sizeof bufRecv);
     }
 
     printf("Out of loop.\n");

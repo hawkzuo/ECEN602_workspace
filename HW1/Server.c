@@ -13,7 +13,7 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
-#define PORT "3490" // the port users will be connecting to
+
 #define BACKLOG 10 // how many pending connections queue will hold
 #define PROTOCOL "echos"
 #define MAXDATASIZE 100 // max number of bytes we can get at once
@@ -38,9 +38,7 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-
-
-
+// writen n chars to the socket
 ssize_t writen(int fd, const void *vptr, size_t n) {
     size_t nleft;
     ssize_t nwritten;
@@ -67,17 +65,6 @@ ssize_t writen(int fd, const void *vptr, size_t n) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 int main(int argc, char** argv)
 {
 	int sockfd, new_fd; // listen on sock_fd, new connection on new_fd
@@ -92,7 +79,7 @@ int main(int argc, char** argv)
 
 	char ip4[INET_ADDRSTRLEN]; 
 
-	// For child process
+	// For child process use
 	int number_read;
 	char buf[MAXDATASIZE];
 
@@ -112,7 +99,7 @@ int main(int argc, char** argv)
 	/* This part do the IP address look-up, creating socket, and bind the port process */
 
 	memset(&hints, 0, sizeof hints);	// Reset to zeros
-	hints.ai_family = AF_INET;			// use IPv4 for HW1
+	hints.ai_family = AF_UNSPEC;			// use IPv4 for HW1
 	hints.ai_socktype = SOCK_STREAM;	// TCP
 	hints.ai_flags = AI_PASSIVE; 		// use my IP
 	if ((rv = getaddrinfo(NULL, argv[2], &hints, &servinfo)) != 0) {
@@ -141,12 +128,13 @@ int main(int argc, char** argv)
 		}
 		break;
 	}
-
 	freeaddrinfo(servinfo); // all done with this structure
 	if (p == NULL) {
 		fprintf(stderr, "server: failed to bind\n");
 		exit(1);
 	}
+
+	/* This part starts the listening process 	*/
 	if (listen(sockfd, BACKLOG) == -1) {
 		perror("listen");
 		exit(1);
@@ -156,7 +144,7 @@ int main(int argc, char** argv)
 		printf("The server starts listening at %s, at port %d.\n", ip4, port_number );
 	}
 
-
+	/*	Multi-process settings */
 	sa.sa_handler = sigchld_handler; // reap all dead processes
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = SA_RESTART;
@@ -167,7 +155,8 @@ int main(int argc, char** argv)
 
 	printf("server: waiting for connections...\n");
 
-	while(1) { // main accept() loop
+	// main accept() loop
+	while(1) { 
 		sin_size = sizeof their_addr;
 		new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
 		if (new_fd == -1) {
@@ -184,7 +173,8 @@ int main(int argc, char** argv)
 			// Child process
 			close(sockfd); // child doesn't need the listener
 			while(number_read = recv(new_fd, buf, MAXDATASIZE, 0) > 0) {
-		        if((int)writen(new_fd, buf, number_read) != number_read) {
+				printf("Received string: %s\n", buf);
+		        if((int)writen(new_fd, buf, strlen(buf)) != strlen(buf)) {
 		            fprintf(stderr, 
 		                "Encounter an error sending lines. Expected:%d\n", number_read);
 		            printf("Closing connection...\n");
@@ -192,9 +182,10 @@ int main(int argc, char** argv)
 					printf("Child process ended.\n");
 					exit(0);
 		        } else {
-		            printf("Sent input string %s to the client.\n", buf);
+		        	
+		            printf("Sent input tt string %s to the client.\n", buf);
 		        }
-		        buf[0] = '\0';	
+		        memset(&buf, '\0', sizeof buf);	
 			}
 			if(number_read < 0) {
 				perror("receive");
