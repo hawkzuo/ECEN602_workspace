@@ -11,6 +11,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include "readFast.h"
 #define PORT "5432" // the port client will be connecting to
 #define MAXDATASIZE 100 // max number of bytes we can get at once
 
@@ -171,7 +172,7 @@ int main(int argc, char *argv[])
         }
         
         printf("Begin receiving\n");    
-        if((int)readline(sockfd, bufRecv, MAXDATASIZE) != len-1)  {
+        if((int)readFast(sockfd, bufRecv, MAXDATASIZE) != len-1)  {
             printf("Received wrong string %s , with length: %d, expected length: %d \n", bufRecv, strlen(bufRecv), len);
         } else {
             printf("Received:\n");
