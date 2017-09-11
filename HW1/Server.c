@@ -16,7 +16,7 @@
 
 #define BACKLOG 10 // how many pending connections queue will hold
 #define PROTOCOL "echos"
-#define MAXDATASIZE 100 // max number of bytes we can get at once
+#define MAXDATASIZE 10 // max number of bytes we can get at once
 
 
 
@@ -172,7 +172,7 @@ int main(int argc, char** argv)
 		if (!fork()) { // this is the child process
 			// Child process
 			close(sockfd); // child doesn't need the listener
-			while(number_read = recv(new_fd, buf, MAXDATASIZE, 0) > 0) {
+			while((number_read = recv(new_fd, buf, MAXDATASIZE, 0)) > 0) {
 				printf("Received string: %s\n", buf);
 		        if((int)writen(new_fd, buf, strlen(buf)) != strlen(buf)) {
 		            fprintf(stderr, 

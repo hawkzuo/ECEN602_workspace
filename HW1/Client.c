@@ -13,7 +13,8 @@
 #include <arpa/inet.h>
 #include "readFast.h"
 #define PORT "5432" // the port client will be connecting to
-#define MAXDATASIZE 100 // max number of bytes we can get at once
+#define MAXDATASIZE 10 // max number of bytes we can get at once
+#define PROTOCOL "echos"
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -116,8 +117,11 @@ int main(int argc, char *argv[])
 
 
 
-    if (argc != 2) {
-        fprintf(stderr,"usage: client hostname\n");
+    if (argc != 4) {
+        fprintf(stderr,"Number of arguments error, expected: 4, got: %d\n", argc);
+        exit(1);
+    } else if(strcmp(argv[1], PROTOCOL)) {
+        fprintf(stderr, "Unsupported protocol, expected: echos, got: %s\n", argv[1]);
         exit(1);
     }
 
@@ -125,7 +129,7 @@ int main(int argc, char *argv[])
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    if ((rv = getaddrinfo(argv[1], PORT, &hints, &servinfo)) != 0) {
+    if ((rv = getaddrinfo(argv[2], argv[3], &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
@@ -173,7 +177,7 @@ int main(int argc, char *argv[])
         
         printf("Begin receiving\n");    
         if((int)readFast(sockfd, bufRecv, MAXDATASIZE) != len-1)  {
-            printf("Received wrong string %s , with length: %d, expected length: %d \n", bufRecv, strlen(bufRecv), len);
+            printf("Received wrong string %s , with length: %lu, expected length: %d \n", bufRecv, strlen(bufRecv), len);
         } else {
             printf("Received:\n");
             fputs(bufRecv, stdout);
