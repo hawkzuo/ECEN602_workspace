@@ -16,7 +16,7 @@
 
 #define BACKLOG 10 // how many pending connections queue will hold
 #define PROTOCOL "echos"
-#define MAXDATASIZE 10 // max number of bytes we can get at once
+#define MAXDATASIZE 10 // max number of characters in a string we can send/get at once, including the '\n' char
 
 
 
@@ -81,7 +81,7 @@ int main(int argc, char** argv)
 
 	// For child process use
 	int number_read;
-	char buf[MAXDATASIZE];
+	char buf[MAXDATASIZE+1];
 
 
 	/*	This part checks the input format and record the assigned port number		*/
@@ -172,7 +172,7 @@ int main(int argc, char** argv)
 		if (!fork()) { // this is the child process
 			// Child process
 			close(sockfd); // child doesn't need the listener
-			while((number_read = recv(new_fd, buf, MAXDATASIZE, 0)) > 0) {
+			while((number_read = recv(new_fd, buf, sizeof(buf), 0)) > 0) {
 				printf("Received string: %s\n", buf);
 		        if((int)writen(new_fd, buf, strlen(buf)) != strlen(buf)) {
 		            fprintf(stderr, 
@@ -183,9 +183,9 @@ int main(int argc, char** argv)
 					exit(0);
 		        } else {
 		        	
-		            printf("Sent input tt string %s to the client.\n", buf);
+		            printf("Sent input string '%s' to the client.\n", buf);
 		        }
-		        memset(&buf, '\0', sizeof buf);	
+		        memset(&buf, 0, sizeof buf);
 			}
 			if(number_read < 0) {
 				perror("receive");

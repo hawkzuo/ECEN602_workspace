@@ -8,11 +8,11 @@
 #include <sys/socket.h>
 #include "readFast.h"
 
-#define MAXLINE 100
+#define MAXDATASIZE 10
 
 static int read_cnt;
 static char *read_ptr;
-static char read_buf[MAXLINE];
+static char read_buf[MAXDATASIZE+1];
 
 static ssize_t my_read(int fd, char *ptr)
 {
@@ -60,3 +60,5 @@ ssize_t readlinebuf(void **vptrptr)
         *vptrptr = read_ptr;
     return (read_cnt);
 }
+
+

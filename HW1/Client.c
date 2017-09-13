@@ -13,7 +13,7 @@
 #include <arpa/inet.h>
 #include "readFast.h"
 #define PORT "5432" // the port client will be connecting to
-#define MAXDATASIZE 10 // max number of bytes we can get at once
+#define MAXDATASIZE 10 // max number of characters in a string we can send/get at once, including the '\n' char
 #define PROTOCOL "echos"
 
 // get sockaddr, IPv4 or IPv6:
@@ -107,15 +107,20 @@ ssize_t readline(int fd, void *buffer, size_t n)
 int main(int argc, char *argv[])
 {
     int sockfd, numbytes;
-    char buf[MAXDATASIZE];
+    char buf[MAXDATASIZE+1];
     struct addrinfo hints, *servinfo, *p;
     int rv;
     char s[INET6_ADDRSTRLEN];
 
     int len;
-    char bufRecv[MAXDATASIZE];
+    char bufRecv[MAXDATASIZE+1];
 
 
+    
+    int tmp;
+    
+    
+    
 
     if (argc != 4) {
         fprintf(stderr,"Number of arguments error, expected: 4, got: %d\n", argc);
@@ -163,27 +168,29 @@ int main(int argc, char *argv[])
     /* Now connected */
     while (fgets(buf, sizeof(buf), stdin)) {
 
-        buf[MAXDATASIZE-1] = '\0';
+        buf[MAXDATASIZE] = '\0';
         len = strlen(buf) + 1;
         //  send(s, buf, len, 0);
-        printf("Begin sending\n");
+        printf("Input string:'%s'.\n", buf);
         if((int)writen(sockfd, buf, len) != len) {
             fprintf(stderr, 
                 "Encounter an error sending lines. Expected:%d\n", len);
         } else {
-            printf("Sent input string %s to the server.\n", buf);
+            printf("Sent string '%s' to the server.\n", buf);
 
         }
         
-        printf("Begin receiving\n");    
-        if((int)readFast(sockfd, bufRecv, MAXDATASIZE) != len-1)  {
-            printf("Received wrong string %s , with length: %lu, expected length: %d \n", bufRecv, strlen(bufRecv), len);
+        printf("Begin receiving:\n");
+        tmp = (int)readFast(sockfd, bufRecv, sizeof(bufRecv));
+        printf("Number readFast returned: %d.\n", tmp);
+        if(  tmp != len-1)  {
+            printf("Received wrong string %s, with length: %lu, expected length: %d \n", bufRecv, strlen(bufRecv), len);
         } else {
             printf("Received:\n");
             fputs(bufRecv, stdout);
-        } 
-        memset(&buf, '\0', sizeof buf);
-        memset(&bufRecv, '\0', sizeof bufRecv);
+        }
+        memset(&buf, 0, sizeof buf);
+        memset(&bufRecv, 0, sizeof bufRecv);
     }
 
     printf("Out of loop.\n");

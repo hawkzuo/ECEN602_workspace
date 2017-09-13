@@ -9,3 +9,6 @@ include/
 
 # ignore Mac OS files
 *.DS_Store
+
+# ignore .o files
+*.o
