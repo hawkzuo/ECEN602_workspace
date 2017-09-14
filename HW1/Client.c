@@ -169,6 +169,10 @@ int main(int argc, char *argv[])
     while (fgets(buf, sizeof(buf), stdin)) {
 
         buf[MAXDATASIZE] = '\0';
+        if(strlen(buf) == sizeof(buf)-1 && buf[MAXDATASIZE-1] != '\n') {
+            printf("Input size exceed the maximum acceptable size, will quit. \n");
+            break;
+        }
         len = strlen(buf) + 1;
         //  send(s, buf, len, 0);
         printf("Input string:'%s'.\n", buf);
