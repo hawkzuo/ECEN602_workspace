@@ -1,0 +1,26 @@
+This assignment implements the client and server for a simple TCP echo
+service.
+
+Team role:
+Jianyu Zuo implements the server program and read method. Jimin Wen implements the client program and testing.
+
+Useage:
+run make command to lanuch makefile generating executable two files for the project, Client and Server. run make clean to remove all the 
+generated files from the directory. 
+To lanuch the client. The running command follows the pattern: ./Client echos hostname portnumber
+To lanuch the server. The running command follows the pattern: ./Server echos portnumber
+
+Implementation:
+On client side: 
+The program first implements input validation, get address information and connect to the host. After the connection has been made, the 
+client waits for the user input. The input would be sent to server with written method. The received message from the server is read via
+readFast() in the readFast.c. 
+
+On the server side:
+The program first implements input validation, get address information, bind the socket to the dedicated port number and listen to the 
+socket. The socket accepts new connection when new request is received. The server read sent message calling recv() method and sends it
+back to the client with written().
+
+Errata:
+Server: input arguments error, get address information error, fail to bind server error, error sending the line.
+Client: input arguments error, get address information error, fail to connect error, input size exceed error, error sending a line,
