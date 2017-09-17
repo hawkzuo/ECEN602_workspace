@@ -1,11 +1,7 @@
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include "readFast.h"
 
 #define MAXDATASIZE 10
@@ -19,7 +15,7 @@ static ssize_t my_read(int fd, char *ptr)
 
     if (read_cnt <= 0) {
       again:
-        if ( (read_cnt = read(fd, read_buf, sizeof(read_buf))) < 0) {
+        if ((read_cnt = (int) read(fd, read_buf, sizeof(read_buf))) < 0) {
             if (errno == EINTR)
                 goto again;
             return (-1);
@@ -32,13 +28,14 @@ static ssize_t my_read(int fd, char *ptr)
     *ptr = *read_ptr++;
     return (1);
 }
-ssize_t readFast(int fd, void *vptr, size_t maxlen)
+
+ssize_t readFast(int fd, void *vptr, size_t max_len)
 {
     ssize_t n, rc;
     char    c, *ptr;
 
     ptr = vptr;
-    for (n = 1; n < maxlen; n++) {
+    for (n = 1; n < max_len; n++) {
         if ( (rc = my_read(fd, &c)) == 1) {
             *ptr++ = c;
             if (c  == '\n')
@@ -52,13 +49,6 @@ ssize_t readFast(int fd, void *vptr, size_t maxlen)
 
     *ptr  = 0;                  /* null terminate like fgets() */
     return (n);
-}
-
-ssize_t readlinebuf(void **vptrptr)
-{
-    if (read_cnt)
-        *vptrptr = read_ptr;
-    return (read_cnt);
 }
 
 
