@@ -10,6 +10,6 @@ readFast.o: readFast.c
 	gcc -c readFast.c 
 
 clean:
-	rm -rf *.o
+	rm *.o
 
 
