@@ -1,5 +1,5 @@
 
-ECEN 602 folder
+ECEN 602 Programming Assignments
 
 
 
