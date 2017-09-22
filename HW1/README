@@ -4,11 +4,11 @@ service.
 Team role:
 Jianyu Zuo implements the server program and read method. Jimin Wen implements the client program and testing.
 
-Useage:
-run make command to lanuch makefile generating executable two files for the project, Client and Server. run make clean to remove all the 
+Usage:
+run make command to launch makefile generating executable two files for the project, Client and Server. run make clean to remove all the 
 generated files from the directory. 
-To lanuch the client. The running command follows the pattern: ./Client echos hostname portnumber
-To lanuch the server. The running command follows the pattern: ./Server echos portnumber
+To launch the client. The running command follows the pattern: ./Client echos hostname portnumber
+To launch the server. The running command follows the pattern: ./Server echos portnumber
 
 Implementation:
 On client side: 
@@ -23,4 +23,5 @@ back to the client with written().
 
 Errata:
 Server: input arguments error, get address information error, fail to bind server error, error sending the line.
-Client: input arguments error, get address information error, fail to connect error, input size exceed error, error sending a line,
+Client: input arguments error, get address information error, fail to connect error, input size exceed error, error sending a line.
+
