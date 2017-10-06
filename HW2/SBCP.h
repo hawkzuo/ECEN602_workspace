@@ -7,16 +7,21 @@
 #ifndef ECEN602_WORKSPACE_SBCP_H
 #define ECEN602_WORKSPACE_SBCP_H
 
-#endif //ECEN602_WORKSPACE_SBCP_H
 
-u_int8_t PROTOCOLVERSION=3;
-u_int8_t JOIN=2;
-u_int8_t SEND=4;
-u_int8_t FWD=3;
-u_int8_t ATTRREASON=1;
-u_int8_t ATTRUSERNAME=2;
-u_int8_t ATTRCOUNT=3;
-u_int8_t ATTRMESSAGE=4;
+static u_int8_t PROTOCOLVERSION=3;
+static u_int8_t JOIN=2;
+static u_int8_t SEND=4;
+static u_int8_t FWD=3;
+static u_int8_t ATTRREASON=1;
+static u_int8_t ATTRUSERNAME=2;
+static u_int8_t ATTRCOUNT=3;
+static u_int8_t ATTRMESSAGE=4;
+// Bonus Parts:
+static u_int8_t ACK=7;
+static u_int8_t NAK=5;
+static u_int8_t ONLINE=8;
+static u_int8_t OFFLINE=6;
+static u_int8_t IDLE=9;
 
 
 struct SBCPAttribute {
@@ -28,5 +33,18 @@ struct SBCPAttribute {
 
 struct SBCPMessage {
     unsigned char header[4];
-    struct SBCPAttribute payload[5];
+    struct SBCPAttribute payload[100];
 };
+
+
+struct SBCPAttribute * buildNameAttr(char* username, u_int16_t name_attr_length);
+
+struct SBCPAttribute * buildCountAttr(u_int16_t client_count);
+
+struct SBCPAttribute * buildReasonAttr(char* reason, u_int16_t reason_attr_length);
+
+struct SBCPAttribute * buildMessageAttr(char *message, u_int16_t message_attr_length);
+
+#endif //ECEN602_WORKSPACE_SBCP_H
+
+
