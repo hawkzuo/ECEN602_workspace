@@ -50,18 +50,18 @@ struct SBCPAttribute * buildMessageAttr(char *message, uint16_t message_attr_len
 // These generate different types of SBCPATTR, the return value is the bytes of each type of attribute
 int generateNAK(struct SBCPMessage *msg, char* reason);
 
-int generateACK(struct SBCPMessage *msg, char* usernames[MAXUSERCOUNT]);
-
 int generateJOIN(struct SBCPMessage *msg, char *username);
 
 int generateSEND(struct SBCPMessage *msg, char *messages);
 
-int generateFWD(struct SBCPMessage *msg);
 
 int generateONLINE(struct SBCPMessage *msg, char *username);
 
 int generateOFFLINE(struct SBCPMessage *msg, char *username);
 
+int generateFWD(struct SBCPMessage *msg, char *username, char *messages);
+
+int generateACK(struct SBCPMessage *msg, char* usernames[MAXUSERCOUNT]);
 
 #endif //ECEN602_WORKSPACE_SBCP_H
 

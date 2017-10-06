@@ -100,7 +100,7 @@ int send_message(struct SBCPMessage *message, int msg_length, int fd)
         }
 
     } else if ((message->header[1] & 0x7F) == FWD) {
-//        msg->header[1] = (uint8_t)(SEND | 0x80);
+
         // 2 frames needed to send
 
 
@@ -247,6 +247,9 @@ int main(int argc, char *argv[])
 
 
 
+
+
+
     fd_set read_fds; // temp file descriptor list for select()
     fd_set master;
 
@@ -281,6 +284,7 @@ int main(int argc, char *argv[])
                 printf("Binary: %s\n", byte_to_binary(bufRecv[i]));
             }
             memset(&bufRecv, 0, sizeof bufRecv);
+            printf("Please keep entering the message:\n");
         }
 
         if(msg_length > 10000) {
