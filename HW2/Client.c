@@ -98,7 +98,7 @@ int send_message(struct SBCPMessage *message, int msg_length, int fd)
         }
 
     } else if ((message->header[1] & 0x7F) == FWD) {
-//        msg->header[1] = (u_int8_t)(SEND | 0x80);
+//        msg->header[1] = (uint8_t)(SEND | 0x80);
         // 2 frames needed to send
 
 
