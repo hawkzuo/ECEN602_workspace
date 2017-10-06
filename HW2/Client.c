@@ -130,110 +130,8 @@ int send_message(struct SBCPMessage *message, int msg_length, int fd)
 }
 
 
-int generateNAK(struct SBCPMessage *msg, char* reason)
-{
-    u_int16_t reason_attr_length = (u_int16_t) (1 + strlen(reason) + 4);
-    struct SBCPAttribute *reasonAttr = buildReasonAttr(reason, reason_attr_length);
-    msg->payload[0] = *reasonAttr;
-    free(reasonAttr);
-    u_int16_t total_Bytes = (u_int16_t) (4 + reason_attr_length);
-    msg->header[0] = PROTOCOLVERSION >> 1;
-    msg->header[1] = (u_int8_t)(NAK | 0x80);
-    msg->header[2] = (u_int8_t)(total_Bytes >> 8);
-    msg->header[3] = (u_int8_t)(total_Bytes & 0xFF);
-
-    return total_Bytes;
-}
 
 
-int generateACK(struct SBCPMessage *msg, char* usernames[10])
-{
-
-    u_int16_t counter = 0;
-    int total_Bytes = 4;
-    for(int i=0; i< 10; i++) {
-
-        char* stepUsername = usernames[i];
-//        printf("%s\n", stepUsername);
-        if(stepUsername == NULL) {
-            counter = (u_int16_t) i;
-            break;
-        }
-        // Create a username Attr.
-        u_int16_t name_attr_length = (u_int16_t) (1 + strlen(stepUsername) + 4);
-        struct SBCPAttribute *nameAttr = buildNameAttr(stepUsername, name_attr_length);
-        // Assign to the msg Structure
-        msg->payload[i+1] = *nameAttr;
-        total_Bytes += name_attr_length;
-        free(nameAttr);
-
-    }
-
-    // Create the client count Attribute
-    u_int16_t count_attr_length = (u_int16_t) (2 + 4);
-    struct SBCPAttribute *countAttr = buildCountAttr(counter);
-    msg->payload[0] = *countAttr;
-    free(countAttr);
-
-    // Finally create the Message
-    total_Bytes += count_attr_length;
-    msg->header[0] = PROTOCOLVERSION >> 1;
-    msg->header[1] = (u_int8_t)(ACK | 0x80);
-    msg->header[2] = (u_int8_t)(total_Bytes >> 8);
-    msg->header[3] = (u_int8_t)(total_Bytes & 0xFF);
-
-    return total_Bytes;
-}
-
-
-int generateJOIN(struct SBCPMessage *msg, char *username)
-{
-
-    // Generate JOIN Message
-    // Required: 'username' field
-    // Setup SBCP message attribute
-    u_int16_t name_attr_length = (u_int16_t) (1 + strlen(username) + 4);
-    struct SBCPAttribute *nameAttr = buildNameAttr(username, name_attr_length);
-
-    // Setup SBCP message
-    msg->payload[0] = *nameAttr;
-    u_int16_t msg_length = (u_int16_t) (name_attr_length + 4);
-    msg->header[0] = PROTOCOLVERSION >> 1;
-    msg->header[1] = (u_int8_t)(JOIN | 0x80);
-    msg->header[2] = (u_int8_t)(msg_length >> 8);
-    msg->header[3] = (u_int8_t)(msg_length & 0xFF);
-
-
-//    printf("msg length : %hu\n", msg_length);
-//    printf("Message Header 0: %s\n", byte_to_binary(msg->header[0]));
-//    printf("Message Header 1: %s\n", byte_to_binary(msg->header[1]));
-//    printf("Message Header 2: %s\n", byte_to_binary(msg->header[2]));
-//    printf("Message Header 3: %s\n", byte_to_binary(msg->header[3]));
-
-    return msg_length;
-
-}
-
-
-int generateSEND(struct SBCPMessage *msg, char *messages)
-{
-    u_int16_t message_attr_length = (u_int16_t) (1+strlen(messages) + 4);
-    struct SBCPAttribute *messageAttr = buildMessageAttr(messages, message_attr_length);
-
-    msg->payload[0] = *messageAttr;
-    u_int16_t msg_length = (u_int16_t) (message_attr_length + 4);
-    msg->header[0] = PROTOCOLVERSION >> 1;
-    msg->header[1] = (u_int8_t)(SEND | 0x80);
-    msg->header[2] = (u_int8_t)(msg_length >> 8);
-    msg->header[3] = (u_int8_t)(msg_length & 0xFF);
-
-    return msg_length;
-}
-
-//int generateFWD(struct SBCPMessage *msg) {
-//
-//
-//}
 
 
 int main(int argc, char *argv[])
@@ -317,33 +215,33 @@ int main(int argc, char *argv[])
     // Client SBCP message
 
 //     1st: Send JOIN to server.
-//    struct SBCPMessage *join_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-//    int msg_length = generateJOIN(join_msg, username);
-//    int join_rv = send_message(join_msg, msg_length, socket_fd);
+    struct SBCPMessage *join_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    int msg_length = generateJOIN(join_msg, username);
+    int join_rv = send_message(join_msg, msg_length, socket_fd);
 
 //    printf("Real Size of SBCP Message: %zu", sizeof(msg));
 //    printf("SBCP Message Payload size: %zu", msg->payload);
 
 
 //     2nd: ACK message
-//    char* usernames[10];
-//    memset(&usernames, 0, sizeof usernames);
-//    usernames[0] = "A";
-//    usernames[1] = "J";
-//    usernames[2] = "N";
+    char* usernames[MAXUSERCOUNT];
+    memset(&usernames, 0, sizeof usernames);
+    usernames[0] = "A";
+    usernames[1] = "J";
+    usernames[2] = "N";
 //
-//    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-//    int ack_msg_len = generateACK(ack_msg, usernames);
-//    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
+    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    int ack_msg_len = generateACK(ack_msg, usernames);
+    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
 
 //     3rd: NAK message
-//    struct SBCPMessage *nak_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-//    printf("Here");
-//    char *sampleReason = "123456789";
-//    printf("before %s", sampleReason);
-//    int nak_msg_len = generateNAK(nak_msg, sampleReason);
-//    printf("after %s", sampleReason);
-//    int nak_rv = send_message(nak_msg, nak_msg_len, socket_fd);
+    struct SBCPMessage *nak_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    printf("Here");
+    char *sampleReason = "123456789";
+    printf("before %s", sampleReason);
+    int nak_msg_len = generateNAK(nak_msg, sampleReason);
+    printf("after %s", sampleReason);
+    int nak_rv = send_message(nak_msg, nak_msg_len, socket_fd);
 
 
 //    while (fgets(buf, sizeof(buf), stdin)) {
