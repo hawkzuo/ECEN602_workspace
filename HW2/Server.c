@@ -190,16 +190,18 @@ int main(int argc, char** argv)
                     printf("Binary: %s\n", byte_to_binary(buf[i]));
                 }
 
-//		        if((int)writen(new_fd, buf, strlen(buf)) != strlen(buf)) {
-//		            fprintf(stderr,
-//		                "Encounter an error sending lines. Expected:%zi\n", number_read);
-//		            printf("Closing connection...\n");
-//					close(new_fd);
-//					printf("Child process ended.\n");
-//					exit(0);
-//		        } else {
-//		            printf("Sent input string back to the client.\n");
-//		        }
+
+                // Must use number_read here, instead of strlen(buf)
+		        if((int)writen(new_fd, buf, number_read) != number_read) {
+		            fprintf(stderr,
+		                "Encounter an error sending lines. Expected:%zi\n", number_read);
+		            printf("Closing connection...\n");
+					close(new_fd);
+					printf("Child process ended.\n");
+					exit(0);
+		        } else {
+		            printf("Sent input string back to the client. Count: %zu\n", number_read);
+		        }
 
 
                 memset(&buf, 0, sizeof buf);

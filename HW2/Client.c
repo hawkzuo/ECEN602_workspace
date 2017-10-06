@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include "SBCP.h"
 
-#define MAXDATASIZE 10 // max number of characters in a string we can send/get at once, including the '\n' char
+#define MAXDATASIZE 256 // max number of characters in a string we can send/get at once, including the '\n' char
 
 
 // get sockaddr, IPv4 or IPv6:
@@ -29,7 +29,7 @@ ssize_t writen(int fd, void *vptr, size_t n) {
     char *ptr;
 
     ptr = vptr;
-    printf("converted version of msg: %s\n", ptr);
+//    printf("converted version of msg: %s\n", ptr);
     num_char_left = n;
     while (num_char_left > 0) {
         // write is system call
@@ -151,12 +151,13 @@ int main(int argc, char *argv[])
     // s: server IP address
     char s[INET6_ADDRSTRLEN];
 
-    size_t len;
+
+    int message_len;
     char bufRecv[MAXDATASIZE+1];
 
 
     // received_count: Count of chars received from the server
-    int received_count;
+    ssize_t received_count;
 
     // Client Username
     char* username;
@@ -224,25 +225,75 @@ int main(int argc, char *argv[])
 
 
 //     2nd: ACK message
-    char* usernames[MAXUSERCOUNT];
-    memset(&usernames, 0, sizeof usernames);
-    usernames[0] = "A";
-    usernames[1] = "J";
-    usernames[2] = "N";
-//
-    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-    int ack_msg_len = generateACK(ack_msg, usernames);
-    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
+//    char* usernames[MAXUSERCOUNT];
+//    memset(&usernames, 0, sizeof usernames);
+//    usernames[0] = "A";
+//    usernames[1] = "J";
+//    usernames[2] = "N";
+//    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+//    int ack_msg_len = generateACK(ack_msg, usernames);
+//    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
 
 //     3rd: NAK message
-    struct SBCPMessage *nak_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-    printf("Here");
-    char *sampleReason = "123456789";
-    printf("before %s", sampleReason);
-    int nak_msg_len = generateNAK(nak_msg, sampleReason);
-    printf("after %s", sampleReason);
-    int nak_rv = send_message(nak_msg, nak_msg_len, socket_fd);
+//    struct SBCPMessage *nak_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+//    printf("Here");
+//    char *sampleReason = "123456789";
+//    printf("before %s", sampleReason);
+//    int nak_msg_len = generateNAK(nak_msg, sampleReason);
+//    printf("after %s", sampleReason);
+//    int nak_rv = send_message(nak_msg, nak_msg_len, socket_fd);
 
+
+
+    fd_set read_fds; // temp file descriptor list for select()
+    fd_set master;
+
+    while(1)  {
+        FD_SET(0, &master);
+        FD_SET(socket_fd, &master);
+
+        select(1+socket_fd, &master, NULL, NULL, NULL);
+        if(FD_ISSET(0, &master)) {
+            // You have something in the terminal
+            buf[MAXDATASIZE] = '\0';
+
+            // fgets includes the '\n' char
+            fgets(buf, sizeof(buf), stdin);
+//            message_len = strlen(buf) + 1;
+            printf("Input string (no space):%s", buf);
+            struct SBCPMessage *msg = (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+            message_len = generateSEND(msg, buf);
+            printf("Imessage_len:%d", message_len);
+            int send_rv = send_message(msg, message_len, socket_fd);
+            memset(&buf, 0, sizeof buf);
+
+        } else {
+            // You have messages waiting to be displayed in the terminal
+            received_count = recv(socket_fd, bufRecv, sizeof(bufRecv), 0);
+            printf("Number Recv: %zu\n", received_count);
+
+            printf("Received:\n");
+            fputs(bufRecv, stdout);
+
+            for(int i=0; i<received_count; i++) {
+                printf("Binary: %s\n", byte_to_binary(bufRecv[i]));
+            }
+            memset(&bufRecv, 0, sizeof bufRecv);
+        }
+
+        if(msg_length > 10000) {
+            break;
+        }
+
+    }
+
+
+
+
+
+
+
+//    select();
 
 //    while (fgets(buf, sizeof(buf), stdin)) {
 //
@@ -278,6 +329,10 @@ int main(int argc, char *argv[])
 
 //    free(join_msg);
 //    free(nameAttr);
+
+    free(join_msg);
+//    free(ack_msg);
+//    free(nak_msg);
 
     return 0;
 }
