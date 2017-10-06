@@ -3,6 +3,7 @@
 //
 #include <stdlib.h>
 #include <memory.h>
+#include <stdint.h>
 #include "SBCP.h"
 
 // Reason why attr_len is the input is because outer program will need this value
@@ -44,7 +45,7 @@ struct SBCPAttribute * buildReasonAttr(char* reason, uint16_t reason_attr_length
 {
     struct SBCPAttribute *reasonAttr = (struct SBCPAttribute*)malloc(sizeof(struct SBCPAttribute));
     reasonAttr->attr_payload = malloc((strlen(reason)+1)*sizeof(char));
-
+    
     strcpy(reasonAttr->attr_payload, reason);
 
     reasonAttr->attr_header[0] = 0;
@@ -168,6 +169,55 @@ int generateSEND(struct SBCPMessage *msg, char *messages)
     return msg_length;
 }
 
+int generateONLINE(struct SBCPMessage *mag, char *username){
+        // Generate ONLINE Message
+    // Required: 'username' field
+    // Setup SBCP message attribute
+    u_int16_t name_attr_length = (u_int16_t) (1 + strlen(username) + 4);
+    struct SBCPAttribute *nameAttr = buildNameAttr(username, name_attr_length);
+
+    // Setup SBCP message
+    msg->payload[0] = *nameAttr;
+    u_int16_t msg_length = (u_int16_t) (name_attr_length + 4);
+    msg->header[0] = PROTOCOLVERSION >> 1;
+    msg->header[1] = (u_int8_t)(ONLINE | 0x80);
+    msg->header[2] = (u_int8_t)(msg_length >> 8);
+    msg->header[3] = (u_int8_t)(msg_length & 0xFF);
+
+
+//    printf("msg length : %hu\n", msg_length);
+//    printf("Message Header 0: %s\n", byte_to_binary(msg->header[0]));
+//    printf("Message Header 1: %s\n", byte_to_binary(msg->header[1]));
+//    printf("Message Header 2: %s\n", byte_to_binary(msg->header[2]));
+//    printf("Message Header 3: %s\n", byte_to_binary(msg->header[3]));
+
+    return msg_length;
+}
+
+int generateOFFLINE(struct SBCPMessage *mag, char *username){
+            // Generate OFFLINE Message
+    // Required: 'username' field
+    // Setup SBCP message attribute
+    u_int16_t name_attr_length = (u_int16_t) (1 + strlen(username) + 4);
+    struct SBCPAttribute *nameAttr = buildNameAttr(username, name_attr_length);
+
+    // Setup SBCP message
+    msg->payload[0] = *nameAttr;
+    u_int16_t msg_length = (u_int16_t) (name_attr_length + 4);
+    msg->header[0] = PROTOCOLVERSION >> 1;
+    msg->header[1] = (u_int8_t)(OFFLINE | 0x80);
+    msg->header[2] = (u_int8_t)(msg_length >> 8);
+    msg->header[3] = (u_int8_t)(msg_length & 0xFF);
+
+
+//    printf("msg length : %hu\n", msg_length);
+//    printf("Message Header 0: %s\n", byte_to_binary(msg->header[0]));
+//    printf("Message Header 1: %s\n", byte_to_binary(msg->header[1]));
+//    printf("Message Header 2: %s\n", byte_to_binary(msg->header[2]));
+//    printf("Message Header 3: %s\n", byte_to_binary(msg->header[3]));
+
+    return msg_length;
+}
 
 int generateFWD(struct SBCPMessage *msg) {
 

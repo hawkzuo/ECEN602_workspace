@@ -2,7 +2,11 @@
 // Created by Jianyu Zuo on 10/5/17.
 //
 
+<<<<<<< HEAD
 #include <stdint.h>
+=======
+//#include <ntsid.h>
+>>>>>>> 541f525... online offline
 
 #ifndef ECEN602_WORKSPACE_SBCP_H
 #define ECEN602_WORKSPACE_SBCP_H
@@ -58,9 +62,11 @@ int generateSEND(struct SBCPMessage *msg, char *messages);
 
 int generateFWD(struct SBCPMessage *msg);
 
+int generateONLINE(struct SBCPMessage *mag, char *username);
 
+int generateOFFLINE(struct SBCPMessage *mag, char *username);
 
-
+int generateONLINE(struct SBCPMessage *mag, char *username);
 
 #endif //ECEN602_WORKSPACE_SBCP_H
 
