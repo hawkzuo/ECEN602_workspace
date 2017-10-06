@@ -9,7 +9,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include "readFast.h"
-#define PORT "5432" // the port client will be connecting to
+
 #define MAXDATASIZE 10 // max number of characters in a string we can send/get at once, including the '\n' char
 #define PROTOCOL "echos"
 
@@ -45,51 +45,6 @@ ssize_t writen(int fd, void *vptr, size_t n) {
         ptr += num_char_written;
     }
     return n;
-}
-
-// Slow version of read line function [not used]
-ssize_t readline(int fd, void *buffer, size_t n)
-{
-    int numRead;                    /* # of bytes fetched by last read() */
-    size_t totRead;                     /* Total bytes read so far */
-    char *bf;
-    char ch;
-
-    if (n <= 0 || buffer == NULL) {
-        errno = EINVAL;
-        return -1;
-    }
-    bf = buffer;                       /* No pointer arithmetic on "void *" */
-
-    totRead = 0;
-    for (;;) {
-        numRead = (int) read(fd, &ch, 1);
-        if (numRead == -1) {
-            if (errno == EINTR) {
-                continue;       /* Interrupted --> restart read() */
-            } else {
-                return -1;              /* Some other error */
-            }        
-        } else if (numRead == 0) {      /* EOF */
-            if (totRead == 0)           /* No bytes read; return 0 */
-                return 0;
-            else                        /* Some bytes read; add '\0' */
-                break;
-
-        } else {                        /* 'numRead' must be 1 if we get here */
-            if (totRead < n - 1) {      /* Discard > (n - 1) bytes */
-                totRead++;
-                *bf = ch;
-                bf++;
-            }
-   
-            if (ch == '\n')
-                break;
-        }
-    }
-
-    *bf = '\0';
-    return totRead;
 }
 
 
