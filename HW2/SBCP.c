@@ -169,7 +169,7 @@ int generateSEND(struct SBCPMessage *msg, char *messages)
     return msg_length;
 }
 
-int generateONLINE(struct SBCPMessage *mag, char *username){
+int generateONLINE(struct SBCPMessage *msg, char *username){
         // Generate ONLINE Message
     // Required: 'username' field
     // Setup SBCP message attribute
@@ -194,7 +194,7 @@ int generateONLINE(struct SBCPMessage *mag, char *username){
     return msg_length;
 }
 
-int generateOFFLINE(struct SBCPMessage *mag, char *username){
+int generateOFFLINE(struct SBCPMessage *msg, char *username){
             // Generate OFFLINE Message
     // Required: 'username' field
     // Setup SBCP message attribute

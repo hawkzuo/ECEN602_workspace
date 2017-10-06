@@ -2,11 +2,7 @@
 // Created by Jianyu Zuo on 10/5/17.
 //
 
-<<<<<<< HEAD
 #include <stdint.h>
-=======
-//#include <ntsid.h>
->>>>>>> 541f525... online offline
 
 #ifndef ECEN602_WORKSPACE_SBCP_H
 #define ECEN602_WORKSPACE_SBCP_H
