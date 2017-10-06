@@ -8,6 +8,8 @@
 #include <string.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include "SBCP.h"
 
 #define MAXDATASIZE 256 // max number of characters in a string we can send/get at once, including the '\n' char
@@ -286,10 +288,6 @@ int main(int argc, char *argv[])
         }
 
     }
-
-
-
-
 
 
 

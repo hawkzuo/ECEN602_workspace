@@ -58,11 +58,10 @@ int generateSEND(struct SBCPMessage *msg, char *messages);
 
 int generateFWD(struct SBCPMessage *msg);
 
-int generateONLINE(struct SBCPMessage *mag, char *username);
+int generateONLINE(struct SBCPMessage *msg, char *username);
 
-int generateOFFLINE(struct SBCPMessage *mag, char *username);
+int generateOFFLINE(struct SBCPMessage *msg, char *username);
 
-int generateONLINE(struct SBCPMessage *mag, char *username);
 
 #endif //ECEN602_WORKSPACE_SBCP_H
 

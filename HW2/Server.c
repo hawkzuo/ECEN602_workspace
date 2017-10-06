@@ -192,7 +192,7 @@ int main(int argc, char** argv)
 
 
                 // Must use number_read here, instead of strlen(buf)
-		        if((int)writen(new_fd, buf, number_read) != number_read) {
+		        if((int)writen(new_fd, buf, (size_t) number_read) != number_read) {
 		            fprintf(stderr,
 		                "Encounter an error sending lines. Expected:%zi\n", number_read);
 		            printf("Closing connection...\n");

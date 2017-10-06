@@ -144,12 +144,6 @@ int generateJOIN(struct SBCPMessage *msg, char *username)
     msg->header[3] = (uint8_t)(msg_length & 0xFF);
 
 
-//    printf("msg length : %hu\n", msg_length);
-//    printf("Message Header 0: %s\n", byte_to_binary(msg->header[0]));
-//    printf("Message Header 1: %s\n", byte_to_binary(msg->header[1]));
-//    printf("Message Header 2: %s\n", byte_to_binary(msg->header[2]));
-//    printf("Message Header 3: %s\n", byte_to_binary(msg->header[3]));
-
     return msg_length;
 
 }
@@ -170,51 +164,37 @@ int generateSEND(struct SBCPMessage *msg, char *messages)
 }
 
 int generateONLINE(struct SBCPMessage *msg, char *username){
-        // Generate ONLINE Message
+    // Generate ONLINE Message
     // Required: 'username' field
     // Setup SBCP message attribute
-    u_int16_t name_attr_length = (u_int16_t) (1 + strlen(username) + 4);
+    uint16_t name_attr_length = (uint16_t) (1 + strlen(username) + 4);
     struct SBCPAttribute *nameAttr = buildNameAttr(username, name_attr_length);
 
     // Setup SBCP message
     msg->payload[0] = *nameAttr;
-    u_int16_t msg_length = (u_int16_t) (name_attr_length + 4);
+    uint16_t msg_length = (uint16_t) (name_attr_length + 4);
     msg->header[0] = PROTOCOLVERSION >> 1;
-    msg->header[1] = (u_int8_t)(ONLINE | 0x80);
-    msg->header[2] = (u_int8_t)(msg_length >> 8);
-    msg->header[3] = (u_int8_t)(msg_length & 0xFF);
-
-
-//    printf("msg length : %hu\n", msg_length);
-//    printf("Message Header 0: %s\n", byte_to_binary(msg->header[0]));
-//    printf("Message Header 1: %s\n", byte_to_binary(msg->header[1]));
-//    printf("Message Header 2: %s\n", byte_to_binary(msg->header[2]));
-//    printf("Message Header 3: %s\n", byte_to_binary(msg->header[3]));
+    msg->header[1] = (uint8_t)(ONLINE | 0x80);
+    msg->header[2] = (uint8_t)(msg_length >> 8);
+    msg->header[3] = (uint8_t)(msg_length & 0xFF);
 
     return msg_length;
 }
 
 int generateOFFLINE(struct SBCPMessage *msg, char *username){
-            // Generate OFFLINE Message
+    // Generate OFFLINE Message
     // Required: 'username' field
     // Setup SBCP message attribute
-    u_int16_t name_attr_length = (u_int16_t) (1 + strlen(username) + 4);
+    uint16_t name_attr_length = (uint16_t) (1 + strlen(username) + 4);
     struct SBCPAttribute *nameAttr = buildNameAttr(username, name_attr_length);
 
     // Setup SBCP message
     msg->payload[0] = *nameAttr;
-    u_int16_t msg_length = (u_int16_t) (name_attr_length + 4);
+    uint16_t msg_length = (uint16_t) (name_attr_length + 4);
     msg->header[0] = PROTOCOLVERSION >> 1;
-    msg->header[1] = (u_int8_t)(OFFLINE | 0x80);
-    msg->header[2] = (u_int8_t)(msg_length >> 8);
-    msg->header[3] = (u_int8_t)(msg_length & 0xFF);
-
-
-//    printf("msg length : %hu\n", msg_length);
-//    printf("Message Header 0: %s\n", byte_to_binary(msg->header[0]));
-//    printf("Message Header 1: %s\n", byte_to_binary(msg->header[1]));
-//    printf("Message Header 2: %s\n", byte_to_binary(msg->header[2]));
-//    printf("Message Header 3: %s\n", byte_to_binary(msg->header[3]));
+    msg->header[1] = (uint8_t)(OFFLINE | 0x80);
+    msg->header[2] = (uint8_t)(msg_length >> 8);
+    msg->header[3] = (uint8_t)(msg_length & 0xFF);
 
     return msg_length;
 }
