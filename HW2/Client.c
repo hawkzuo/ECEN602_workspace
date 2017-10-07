@@ -1,6 +1,7 @@
 /*
 ** client.c -- a stream socket client demo
 */
+// CLion cmake demo: https://www.jetbrains.com/help/clion/quick-cmake-tutorial.html
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,7 +13,7 @@
 #include <unistd.h>
 #include "SBCP.h"
 
-#define MAXDATASIZE 256 // max number of characters in a string we can send/get at once, including the '\n' char
+#define MAXDATASIZE 1000 // max number of characters in a string we can send/get at once, including the '\n' char
 
 
 // get sockaddr, IPv4 or IPv6:
@@ -24,7 +25,7 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-// Write chars to the socket
+/* Write chars to the socket */
 ssize_t writen(int fd, void *vptr, size_t n) {
     size_t num_char_left;
     ssize_t num_char_written;
@@ -50,6 +51,7 @@ ssize_t writen(int fd, void *vptr, size_t n) {
     return n;
 }
 
+/* Binary View Helper */
 const char *byte_to_binary(int x)
 {
     static char b[9];
@@ -64,76 +66,24 @@ const char *byte_to_binary(int x)
     return b;
 }
 
-
-// Used to send SBCP Message to server. Support all message types
+/* Send Message to fd, all types of msg supported*/
 int send_message(struct SBCPMessage *message, int msg_length, int fd)
 {
-
     char buffer[msg_length];
-    int buffer_index = 0;
-    buffer[buffer_index++] = (char) message->header[0];
-    buffer[buffer_index++] = (char) message->header[1];
-    buffer[buffer_index++] = (char) message->header[2];
-    buffer[buffer_index++] = (char) message->header[3];
-
-    struct SBCPAttribute firstAttr =message->payload[0];
-    if(firstAttr.attr_header[1] == ATTRCOUNT) {
-        // This case the message contains more than 1 attribute
-        buffer[buffer_index++] = (char) firstAttr.attr_header[0];
-        buffer[buffer_index++] = (char) firstAttr.attr_header[1];
-        buffer[buffer_index++] = (char) firstAttr.attr_header[2];
-        buffer[buffer_index++] = (char) firstAttr.attr_header[3];
-        buffer[buffer_index++] = firstAttr.attr_payload[0];
-        buffer[buffer_index++] = firstAttr.attr_payload[1];
-
-        int num_of_users = (firstAttr.attr_payload[0] << 8) + firstAttr.attr_payload[1];
-        for(int i=0; i<num_of_users; i++) {
-            struct SBCPAttribute nameAttr = message->payload[1+i];
-            buffer[buffer_index++] = nameAttr.attr_header[0];
-            buffer[buffer_index++] = nameAttr.attr_header[1];
-            buffer[buffer_index++] = nameAttr.attr_header[2];
-            buffer[buffer_index++] = nameAttr.attr_header[3];
-            int username_length = (nameAttr.attr_header[2] << 8) + nameAttr.attr_header[3] - 4;
-            for(int k=0;k<username_length;k++) {
-                buffer[buffer_index++] = nameAttr.attr_payload[k];
-            }
-        }
-
-    } else if ((message->header[1] & 0x7F) == FWD) {
-
-        // 2 frames needed to send
-
-
-    } else {
-        // Other types only 1 Attr is included
-        buffer[4] = (char) message->payload->attr_header[0];
-        buffer[5] = (char) message->payload->attr_header[1];
-        buffer[6] = (char) message->payload->attr_header[2];
-        buffer[7] = (char) message->payload->attr_header[3];
-
-        for(int i=8;i<msg_length;i++) {
-            buffer[i] = message->payload->attr_payload[i - 8];
-        }
+    if(createRawData(buffer, message, msg_length) != 0) {
+        perror("Send Message: raw data");
+        return -1;
     }
-
-//    for(int i=0;i<8;i++) {
-//        printf("Byte: %s", byte_to_binary(buffer[i]));
-//    }
-//    printf("size of buffer: %zi\n", sizeof(buffer));
 
     ssize_t send_count = writen(fd, buffer, sizeof(buffer));
     if(send_count != sizeof(buffer)) {
-        printf("wrong size sent: %zi", send_count);
+        perror("Send Message: writen");
         return -1;
     } else {
         printf("Successfully sent %zi bytes.\n", send_count);
     }
     return 0;
 }
-
-
-
-
 
 
 int main(int argc, char *argv[])
@@ -209,48 +159,13 @@ int main(int argc, char *argv[])
     printf("client: connecting to %s\n", s);
     freeaddrinfo(servinfo); // all done with this structure
 
-
-    /* Now connected
-     * Main task: Read the user input and send to the server, and then receive from the server and
-     * print out the string
-     */
-
-    // Client SBCP message
-
 //     1st: Send JOIN to server.
     struct SBCPMessage *join_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
     int msg_length = generateJOIN(join_msg, username);
     int join_rv = send_message(join_msg, msg_length, socket_fd);
 
-//    printf("Real Size of SBCP Message: %zu", sizeof(msg));
-//    printf("SBCP Message Payload size: %zu", msg->payload);
+    free(join_msg);
 
-
-//     2nd: ACK message
-//    char* usernames[MAXUSERCOUNT];
-//    memset(&usernames, 0, sizeof usernames);
-//    usernames[0] = "A";
-//    usernames[1] = "J";
-//    usernames[2] = "N";
-//    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-//    int ack_msg_len = generateACK(ack_msg, usernames);
-//    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
-
-//     3rd: NAK message
-//    struct SBCPMessage *nak_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-//    printf("Here");
-//    char *sampleReason = "123456789";
-//    printf("before %s", sampleReason);
-//    int nak_msg_len = generateNAK(nak_msg, sampleReason);
-//    printf("after %s", sampleReason);
-//    int nak_rv = send_message(nak_msg, nak_msg_len, socket_fd);
-
-
-
-
-
-
-    fd_set read_fds; // temp file descriptor list for select()
     fd_set master;
 
     while(1)  {
@@ -263,12 +178,13 @@ int main(int argc, char *argv[])
             buf[MAXDATASIZE] = '\0';
 
             // fgets includes the '\n' char
-            fgets(buf, sizeof(buf), stdin);
-//            message_len = strlen(buf) + 1;
+            // If an EOF char detected, we'll break the loop & exit the loop
+            if(!fgets(buf, sizeof(buf), stdin)) {
+                break;
+            }
             printf("Input string (no space):%s", buf);
             struct SBCPMessage *msg = (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
             message_len = generateSEND(msg, buf);
-            printf("Imessage_len:%d", message_len);
             int send_rv = send_message(msg, message_len, socket_fd);
             memset(&buf, 0, sizeof buf);
 
@@ -278,11 +194,12 @@ int main(int argc, char *argv[])
             printf("Number Recv: %zu\n", received_count);
 
             printf("Received:\n");
-            fputs(bufRecv, stdout);
-
             for(int i=0; i<received_count; i++) {
                 printf("Binary: %s\n", byte_to_binary(bufRecv[i]));
             }
+
+            // TODO: Add SBCP Message parsing function parse_message()
+
             memset(&bufRecv, 0, sizeof bufRecv);
             printf("Please keep entering the message:\n");
         }
@@ -293,52 +210,9 @@ int main(int argc, char *argv[])
 
     }
 
-
-
-//    select();
-
-//    while (fgets(buf, sizeof(buf), stdin)) {
-//
-//        buf[MAXDATASIZE] = '\0';
-//        if(strlen(buf) == sizeof(buf)-1 && buf[MAXDATASIZE-1] != '\n') {
-//            printf("Input size exceed the maximum acceptable size, will quit. \n");
-//            break;
-//        }
-//        len = strlen(buf) + 1;
-//
-//        printf("Input string (no space):%s", buf);
-//        if((int)writen(socket_fd, buf, len) != len) {
-//            fprintf(stderr,
-//                "Encounter an error sending lines. Expected:%zu\n", len);
-//        } else {
-//        }
-//
-//        received_count = (int)readFast(socket_fd, bufRecv, sizeof(bufRecv));
-//
-//        if(received_count != len-1)  {
-//            printf("Received wrong string %s, with length: %lu, expected length: %zu \n", bufRecv, strlen(bufRecv), len);
-//        } else {
-//            printf("Received:\n");
-//            fputs(bufRecv, stdout);
-//        }
-//        memset(&buf, 0, sizeof buf);
-//        memset(&bufRecv, 0, sizeof bufRecv);
-//    }
-
     /* End of Program */
     printf("Out of loop.\n");
     close(socket_fd);
 
-//    free(join_msg);
-//    free(nameAttr);
-
-    free(join_msg);
-//    free(ack_msg);
-//    free(nak_msg);
-
     return 0;
 }
-
-
-
-

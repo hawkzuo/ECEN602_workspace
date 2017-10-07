@@ -72,12 +72,39 @@ struct SBCPAttribute * buildMessageAttr(char *message, uint16_t message_attr_len
     return messageAttr;
 }
 
+
+int generateCLIENTIDLE(struct SBCPMessage *msg)
+{
+    msg->header[0] = PROTOCOLVERSION >> 1;
+    msg->header[1] = (uint8_t)(IDLE | 0x80);
+    msg->header[2] = (uint8_t)(4 >> 8);
+    msg->header[3] = (uint8_t)(4 & 0xFF);
+
+    return 4;
+}
+
+int generateSERVERIDLE(struct SBCPMessage *msg, char *username)
+{
+    uint16_t name_attr_length = (uint16_t) (1 + strlen(username) + 4);
+    struct SBCPAttribute *nameAttr = buildNameAttr(username, name_attr_length);
+
+    // Setup SBCP message
+    msg->payload[0] = *nameAttr;
+    uint16_t msg_length = (uint16_t) (name_attr_length + 4);
+    msg->header[0] = PROTOCOLVERSION >> 1;
+    msg->header[1] = (uint8_t)(IDLE | 0x80);
+    msg->header[2] = (uint8_t)(msg_length >> 8);
+    msg->header[3] = (uint8_t)(msg_length & 0xFF);
+
+    free(nameAttr);
+    return msg_length;
+}
+
 int generateNAK(struct SBCPMessage *msg, char* reason)
 {
     uint16_t reason_attr_length = (uint16_t) (1 + strlen(reason) + 4);
     struct SBCPAttribute *reasonAttr = buildReasonAttr(reason, reason_attr_length);
     msg->payload[0] = *reasonAttr;
-    free(reasonAttr);
     uint16_t total_Bytes = (uint16_t) (4 + reason_attr_length);
     msg->header[0] = PROTOCOLVERSION >> 1;
     msg->header[1] = (uint8_t)(NAK | 0x80);
@@ -221,7 +248,6 @@ int generateACK(struct SBCPMessage *msg, char* usernames[MAXUSERCOUNT])
     uint16_t count_attr_length = (uint16_t) (2 + 4);
     struct SBCPAttribute *countAttr = buildCountAttr(counter);
     msg->payload[0] = *countAttr;
-    free(countAttr);
 
     // Finally create the Message
     total_Bytes += count_attr_length;
@@ -230,11 +256,153 @@ int generateACK(struct SBCPMessage *msg, char* usernames[MAXUSERCOUNT])
     msg->header[2] = (uint8_t)(total_Bytes >> 8);
     msg->header[3] = (uint8_t)(total_Bytes & 0xFF);
 
+    free(countAttr);
     return total_Bytes;
+}
+
+int createRawData(char buffer[], struct SBCPMessage *message, int msg_length)
+{
+    int buffer_index = 0;
+    buffer[buffer_index++] = (char) message->header[0];
+    buffer[buffer_index++] = (char) message->header[1];
+    buffer[buffer_index++] = (char) message->header[2];
+    buffer[buffer_index++] = (char) message->header[3];
+
+    if((message->header[1] & 0x7F) == ACK) {
+        // This case the message contains more than 1 attribute
+        struct SBCPAttribute firstAttr =message->payload[0];
+        buffer[buffer_index++] = (char) firstAttr.attr_header[0];
+        buffer[buffer_index++] = (char) firstAttr.attr_header[1];
+        buffer[buffer_index++] = (char) firstAttr.attr_header[2];
+        buffer[buffer_index++] = (char) firstAttr.attr_header[3];
+        buffer[buffer_index++] = firstAttr.attr_payload[0];
+        buffer[buffer_index++] = firstAttr.attr_payload[1];
+
+        int num_of_users = (firstAttr.attr_payload[0] << 8) + firstAttr.attr_payload[1];
+        for(int i=0; i<num_of_users; i++) {
+            struct SBCPAttribute nameAttr = message->payload[1+i];
+            buffer[buffer_index++] = nameAttr.attr_header[0];
+            buffer[buffer_index++] = nameAttr.attr_header[1];
+            buffer[buffer_index++] = nameAttr.attr_header[2];
+            buffer[buffer_index++] = nameAttr.attr_header[3];
+            int username_length = (nameAttr.attr_header[2] << 8) + nameAttr.attr_header[3] - 4;
+            for(int k=0;k<username_length;k++) {
+                buffer[buffer_index++] = nameAttr.attr_payload[k];
+            }
+        }
+
+        if(buffer_index != msg_length) {
+//            printf("sth. wrong in buffer size \n");
+            return -1;
+        }
+    } else if ((message->header[1] & 0x7F) == FWD) {
+        // 2 frames needed to send
+        struct SBCPAttribute nameAttr = message->payload[0];
+        buffer[buffer_index++] = nameAttr.attr_header[0];
+        buffer[buffer_index++] = nameAttr.attr_header[1];
+        buffer[buffer_index++] = nameAttr.attr_header[2];
+        buffer[buffer_index++] = nameAttr.attr_header[3];
+        int username_length = (nameAttr.attr_header[2] << 8) + nameAttr.attr_header[3] - 4;
+        for(int k=0;k<username_length;k++) {
+            buffer[buffer_index++] = nameAttr.attr_payload[k];
+        }
+
+        struct SBCPAttribute messageAttr = message->payload[1];
+        buffer[buffer_index++] = messageAttr.attr_header[0];
+        buffer[buffer_index++] = messageAttr.attr_header[1];
+        buffer[buffer_index++] = messageAttr.attr_header[2];
+        buffer[buffer_index++] = messageAttr.attr_header[3];
+        int messageAttr_length = (messageAttr.attr_header[2] << 8) + messageAttr.attr_header[3] - 4;
+        for(int k=0; k<messageAttr_length;k++) {
+            buffer[buffer_index++] = messageAttr.attr_payload[k];
+        }
+
+        if(buffer_index != msg_length) {
+//            printf("sth. wrong in buffer size \n");
+            return -1;
+        }
+    } else {
+        // Other types only 1 Attr is included
+        if(buffer_index < msg_length) {
+            buffer[4] = (char) message->payload->attr_header[0];
+            buffer[5] = (char) message->payload->attr_header[1];
+            buffer[6] = (char) message->payload->attr_header[2];
+            buffer[7] = (char) message->payload->attr_header[3];
+
+            for(int i=8;i<msg_length;i++) {
+                buffer[i] = message->payload->attr_payload[i - 8];
+            }
+        }
+    }
+    return 0;
 }
 
 
 
 
+
+
+
+
+
+/*  Sample Message Calls
+
+    //     2nd: ACK message
+    char* usernames[MAXUSERCOUNT];
+    memset(&usernames, 0, sizeof usernames);
+    usernames[0] = "A";
+    usernames[1] = "J";
+    usernames[2] = "N";
+    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    int ack_msg_len = generateACK(ack_msg, usernames);
+    //    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
+
+    free(ack_msg);
+
+    //     3rd: NAK message
+    struct SBCPMessage *nak_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    char *sampleReason = "123456789";
+    int nak_msg_len = generateNAK(nak_msg, sampleReason);
+    //    int nak_rv = send_message(nak_msg, nak_msg_len, socket_fd);
+
+    free(nak_msg);
+
+    //      4th: FWD message
+    struct SBCPMessage *fwd_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    char *fwdUser = "fwd";
+    char *fwdMessage = "msg";
+    int fwd_msg_len = generateFWD(fwd_msg, fwdUser, fwdMessage);
+    //    int fwd_rv = send_message(fwd_msg, fwd_msg_len, socket_fd);
+
+    free(fwd_msg);
+
+    //      5th: CLIENTIDLE/SERVERIDLE message
+    struct SBCPMessage *cidle_msg = (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    int cidle_msg_len = generateCLIENTIDLE(cidle_msg);
+    //    int cidle_rv = send_message(cidle_msg, cidle_msg_len, socket_fd);
+
+    free(cidle_msg);
+
+    struct SBCPMessage *sidle_msg = (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    char *sidleUser = "id";
+    int sidle_msg_len = generateSERVERIDLE(sidle_msg, sidleUser);
+    //    int sidle_rv = send_message(sidle_msg, sidle_msg_len, socket_fd);
+
+    free(sidle_msg);
+
+
+    //      6th: ONLINE/OFFLINE message
+    struct SBCPMessage *on_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    struct SBCPMessage *off_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    char *onUser = "onn";
+    char *offUser = "off";
+    int on_msg_len = generateONLINE(on_msg, onUser);
+    int off_msg_len = generateOFFLINE(off_msg, offUser);
+    //    int on_rv = send_message(on_msg, on_msg_len, socket_fd);
+    //    int off_rv = send_message(off_msg, off_msg_len, socket_fd);
+
+    free(on_msg);
+    free(off_msg);
+*/
 
 
