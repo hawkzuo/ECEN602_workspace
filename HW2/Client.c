@@ -11,10 +11,11 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <time.h>
 #include "SBCP.h"
 
 #define MAXDATASIZE 1000 // max number of characters in a string we can send/get at once, including the '\n' char
-
+#define IDLETIME 10     // seconds for clients indicating the idle process
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -85,9 +86,27 @@ int send_message(struct SBCPMessage *message, int msg_length, int fd)
     return 0;
 }
 
-/* Parse the received message from fd, return the type of the message */
 
+void setTimeout(int milliseconds)
+{
+    // If milliseconds is less or equal to 0
+    // will be simple return from function without throw error
+    if (milliseconds <= 0) {
+        fprintf(stderr, "Count milliseconds for timeout is less or equal to 0\n");
+        return;
+    }
 
+    // a current time of milliseconds
+    int milliseconds_since = (int) (clock() * 1000 / CLOCKS_PER_SEC);
+
+    // needed count milliseconds of return from this timeout
+    int end = milliseconds_since + milliseconds;
+
+    // wait while until needed time comes
+    do {
+        milliseconds_since = (int) (clock() * 1000 / CLOCKS_PER_SEC);
+    } while (milliseconds_since <= end);
+}
 
 
 
@@ -206,23 +225,27 @@ int main(int argc, char *argv[])
 //    free(off_msg);
 
     //     2nd: ACK message
-    char* usernames[MAXUSERCOUNT];
-    memset(&usernames, 0, sizeof usernames);
-    usernames[0] = "A";
-    usernames[1] = "J";
-    usernames[2] = "N";
-    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-    int ack_msg_len = generateACK(ack_msg, usernames);
-    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
-
-    free(ack_msg);
+//    char* usernames[MAXUSERCOUNT];
+//    memset(&usernames, 0, sizeof usernames);
+//    usernames[0] = "A";
+//    usernames[1] = "J";
+//    usernames[2] = "N";
+//    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+//    int ack_msg_len = generateACK(ack_msg, usernames);
+//    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
+//
+//    free(ack_msg);
 
     fd_set master;
+    struct timeval tv;
+    tv.tv_sec = IDLETIME;
 
     while(1)  {
         FD_SET(0, &master);
         FD_SET(socket_fd, &master);
-        select(1+socket_fd, &master, NULL, NULL, NULL);
+        select(1+socket_fd, &master, NULL, NULL, &tv);
+
+
         if(FD_ISSET(0, &master)) {
             // You have something in the terminal
             buf[MAXDATASIZE] = '\0';
@@ -232,6 +255,7 @@ int main(int argc, char *argv[])
             if(!fgets(buf, sizeof(buf), stdin)) {
                 break;
             }
+
             printf("Input string (no space):%s", buf);
             struct SBCPMessage *msg = (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
             message_len = generateSEND(msg, buf);
@@ -241,9 +265,11 @@ int main(int argc, char *argv[])
                     perror("client: send message");
                 }
             }
+
+            free(msg);
             memset(&buf, 0, sizeof buf);
 
-        } else {
+        } else if (FD_ISSET(socket_fd, &master)){
             // You have messages waiting to be displayed in the terminal
             received_count = recv(socket_fd, bufRecv, sizeof(bufRecv), 0);
             // 1st: Check the number of bytes received is correct
@@ -312,6 +338,19 @@ int main(int argc, char *argv[])
 
             memset(&bufRecv, 0, sizeof bufRecv);
             printf("Please keep entering the message:\n");
+        } else {
+            // Timeout
+            printf("Input timeout. Will send IDLE to server.\n");
+            struct SBCPMessage *idle_msg = (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+            int idle_message_len = generateCLIENTIDLE(idle_msg);
+            if( idle_message_len != -1) {
+                int send_rv = send_message(idle_msg, idle_message_len, socket_fd);
+                if(send_rv == -1) {
+                    perror("client: send message");
+                }
+            }
+
+            free(idle_msg);
         }
 
         if(socket_fd > 10000) {
