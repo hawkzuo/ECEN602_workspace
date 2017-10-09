@@ -85,11 +85,16 @@ int send_message(struct SBCPMessage *message, int msg_length, int fd)
     return 0;
 }
 
+/* Parse the received message from fd, return the type of the message */
+
+
+
+
 
 int main(int argc, char *argv[])
 {
     // socket_fd: The socket file descriptor
-    int socket_fd;
+    int socket_fd=-1;
 
     // buf: User input buffer
     // MAXDATASIZE is the acceptable input size, including the '\n' char.
@@ -110,6 +115,9 @@ int main(int argc, char *argv[])
 
     // received_count: Count of chars received from the server
     ssize_t received_count;
+    // message_type: the received type of message
+    int message_type;
+
 
     // Client Username
     char* username;
@@ -150,7 +158,7 @@ int main(int argc, char *argv[])
         break;
     }
 
-    if (p == NULL) {
+    if (p == NULL || socket_fd == -1) {
         fprintf(stderr, "client: failed to connect\n");
         return 2;
     }
@@ -160,18 +168,60 @@ int main(int argc, char *argv[])
     freeaddrinfo(servinfo); // all done with this structure
 
 //     1st: Send JOIN to server.
-    struct SBCPMessage *join_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-    int msg_length = generateJOIN(join_msg, username);
-    int join_rv = send_message(join_msg, msg_length, socket_fd);
+//    struct SBCPMessage *join_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+//    int msg_length = generateJOIN(join_msg, username);
+//    if(msg_length == -1) {
+//        perror("client: username length");
+//        exit(1);
+//    }
+//    int join_rv = send_message(join_msg, msg_length, socket_fd);
+//
+//    free(join_msg);
 
-    free(join_msg);
+    // Test Read FWD in client
+//    struct SBCPMessage *fwd_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+//    char *fwdUser = "fwd";
+//    char *fwdMessage = "msg";
+//    int fwd_msg_len = generateFWD(fwd_msg, fwdUser, fwdMessage);
+//    int fwd_rv = send_message(fwd_msg, fwd_msg_len, socket_fd);
+
+    // Test Read NAK in client
+//    struct SBCPMessage *nak_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+//    char *sampleReason = "123456789";
+//    int nak_msg_len = generateNAK(nak_msg, sampleReason);
+//    int nak_rv = send_message(nak_msg, nak_msg_len, socket_fd);
+
+    // Test Read ONLINE/OFFLINE in client
+//    struct SBCPMessage *on_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+//    char *onUser = "onn";
+//    int on_msg_len = generateONLINE(on_msg, onUser);
+//    int on_rv = send_message(on_msg, on_msg_len, socket_fd);
+//    free(on_msg);
+
+
+//    struct SBCPMessage *off_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+//    char *offUser = "off";
+//    int off_msg_len = generateOFFLINE(off_msg, offUser);
+//    int off_rv = send_message(off_msg, off_msg_len, socket_fd);
+//    free(off_msg);
+
+    //     2nd: ACK message
+    char* usernames[MAXUSERCOUNT];
+    memset(&usernames, 0, sizeof usernames);
+    usernames[0] = "A";
+    usernames[1] = "J";
+    usernames[2] = "N";
+    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    int ack_msg_len = generateACK(ack_msg, usernames);
+    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
+
+    free(ack_msg);
 
     fd_set master;
 
     while(1)  {
         FD_SET(0, &master);
         FD_SET(socket_fd, &master);
-
         select(1+socket_fd, &master, NULL, NULL, NULL);
         if(FD_ISSET(0, &master)) {
             // You have something in the terminal
@@ -185,33 +235,93 @@ int main(int argc, char *argv[])
             printf("Input string (no space):%s", buf);
             struct SBCPMessage *msg = (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
             message_len = generateSEND(msg, buf);
-            int send_rv = send_message(msg, message_len, socket_fd);
+            if( message_len != -1) {
+                int send_rv = send_message(msg, message_len, socket_fd);
+                if(send_rv == -1) {
+                    perror("client: send message");
+                }
+            }
             memset(&buf, 0, sizeof buf);
 
         } else {
             // You have messages waiting to be displayed in the terminal
             received_count = recv(socket_fd, bufRecv, sizeof(bufRecv), 0);
-            printf("Number Recv: %zu\n", received_count);
+            // 1st: Check the number of bytes received is correct
+            if(received_count > 4 && (((uint8_t)bufRecv[2] * 256) + (uint8_t)bufRecv[3] == received_count) ) {
+                message_type = bufRecv[1] & 0x7f;
 
-            printf("Received:\n");
-            for(int i=0; i<received_count; i++) {
-                printf("Binary: %s\n", byte_to_binary(bufRecv[i]));
+                printf("Number Bytes Recv: %zu\n", received_count);
+
+//                printf("Received:\n");
+//                for(int i=0; i<received_count; i++) {
+//                    printf("Binary: %s\n", byte_to_binary(bufRecv[i]));
+//                }
+                char * user;
+                char * messageRecv;
+                char * nakReason;
+                char* users[MAXUSERCOUNT];
+                memset(&users, 0, sizeof users);
+                int client_count;
+                switch(message_type) {
+                    case ACK:
+                        if( parseACK(bufRecv, &client_count, users) != -1) {
+                            printf("ACK Received. Current users count: %d\n", client_count);
+                            for(int i=0; i<client_count; i++) {
+                                printf("User '%s' is online. \n", users[i]);
+                            }
+//                            ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+//                            ack_msg_len= generateACK(ack_msg, usernames);
+//                            ack_rv= send_message(ack_msg, ack_msg_len, socket_fd);
+//                            free(ack_msg);
+                        }
+                        break;
+                    case FWD:
+                        if( parseFWD(bufRecv, &messageRecv, &user) != -1 ) {
+                            printf("User '%s' says: \n%s\n", user, messageRecv);
+                            free(user);
+                            free(messageRecv);
+                        }
+                        break;
+                    case NAK:
+                        if( parseNAK(bufRecv, &nakReason) != -1 ) {
+                            printf("Server refused connection and says: \n%s\n", nakReason);
+                            free(nakReason);
+                        }
+                        break;
+                    case ONLINE:
+                        if( parseONLINE(bufRecv, &user) != -1) {
+                            printf("User '%s' is online.\n", user);
+                            free(user);
+                        }
+                        break;
+                    case OFFLINE:
+                        if( parseOFFLINE(bufRecv, &user) != -1) {
+                            printf("User '%s' is offline.\n", user);
+                            free(user);
+                        }
+                        break;
+                    case IDLE:
+                        if( parseSERVERIDLE(bufRecv, &user) != -1) {
+                            printf("User '%s' is idle.\n", user);
+                            free(user);
+                        }
+                        break;
+                    default:break;
+                }
             }
-
-            // TODO: Add SBCP Message parsing function parse_message()
 
             memset(&bufRecv, 0, sizeof bufRecv);
             printf("Please keep entering the message:\n");
         }
 
-        if(msg_length > 10000) {
+        if(socket_fd > 10000) {
             break;
         }
 
     }
 
     /* End of Program */
-    printf("Out of loop.\n");
+    printf("Out of loop. Program will end. \n");
     close(socket_fd);
 
     return 0;

@@ -24,6 +24,18 @@ struct SBCPAttribute * buildNameAttr(char* username, uint16_t name_attr_length)
     return nameAttr;
 }
 
+// Returns the next available index of buffer
+int readNameAttr(const char buffer[], int begin, char** username)
+{
+    if((uint8_t)buffer[begin] != 0 || (uint8_t)buffer[begin+1] != (uint8_t)ATTRUSERNAME) {
+        return -1;
+    }
+    int name_attr_length = (uint8_t)buffer[begin+2]*256 + (uint8_t)buffer[begin+3];
+    *username = malloc((name_attr_length-4)*sizeof(char));
+    strncpy(*username, buffer+begin+4, name_attr_length-4);
+    return begin+name_attr_length;
+}
+
 // Build an attribute of type ATTRCOUNT
 struct SBCPAttribute * buildCountAttr(uint16_t client_count)
 {
@@ -38,6 +50,17 @@ struct SBCPAttribute * buildCountAttr(uint16_t client_count)
     countAttr->attr_header[3] = (uint8_t) (6 & 0xFF);
 
     return countAttr;
+}
+
+// Returns the next available index of buffer
+int readCountAttr(const char buffer[], int begin, int *count)
+{
+    if((uint8_t)buffer[begin] != 0 || (uint8_t)buffer[begin+1] != (uint8_t)ATTRCOUNT) {
+        return -1;
+    }
+    *count = (uint8_t)buffer[begin+4] * 256 + (uint8_t)buffer[begin+5];
+
+    return begin+6;
 }
 
 // Build an attribute of type ATTRREASON
@@ -56,6 +79,18 @@ struct SBCPAttribute * buildReasonAttr(char* reason, uint16_t reason_attr_length
     return reasonAttr;
 }
 
+// Returns the next available index of buffer
+int readReasonAttr(const char buffer[], int begin, char** reason)
+{
+    if((uint8_t)buffer[begin] != 0 || (uint8_t)buffer[begin+1] != (uint8_t)ATTRREASON) {
+        return -1;
+    }
+    int reason_attr_length = (uint8_t)buffer[begin+2]*256 + (uint8_t)buffer[begin+3];
+    *reason = malloc((reason_attr_length-4)*sizeof(char));
+    strncpy(*reason, buffer+begin+4, reason_attr_length-4);
+    return begin+reason_attr_length;
+}
+
 // Build an attribute of type ATTRMESSAGE
 struct SBCPAttribute * buildMessageAttr(char *message, uint16_t message_attr_length)
 {
@@ -72,6 +107,19 @@ struct SBCPAttribute * buildMessageAttr(char *message, uint16_t message_attr_len
     return messageAttr;
 }
 
+// Returns the next available index of buffer
+int readMessageAttr(const char buffer[], int begin, char** message)
+{
+    if((uint8_t)buffer[begin] != 0 || (uint8_t)buffer[begin+1] != (uint8_t)ATTRMESSAGE) {
+        return -1;
+    }
+    int message_attr_length = (uint8_t)buffer[begin+2]*256 + (uint8_t)buffer[begin+3];
+    *message = malloc((message_attr_length-4)*sizeof(char));
+    strncpy(*message, buffer+begin+4, message_attr_length-4);
+    return begin+message_attr_length;
+}
+
+
 
 int generateCLIENTIDLE(struct SBCPMessage *msg)
 {
@@ -85,6 +133,10 @@ int generateCLIENTIDLE(struct SBCPMessage *msg)
 
 int generateSERVERIDLE(struct SBCPMessage *msg, char *username)
 {
+    if(strlen(username) + 1 > ATTRUSERNAMEMAX) {
+        return -1;
+    }
+
     uint16_t name_attr_length = (uint16_t) (1 + strlen(username) + 4);
     struct SBCPAttribute *nameAttr = buildNameAttr(username, name_attr_length);
 
@@ -100,8 +152,15 @@ int generateSERVERIDLE(struct SBCPMessage *msg, char *username)
     return msg_length;
 }
 
+// Return -1 in case of error
+int parseSERVERIDLE(char buffer[], char **username) { return readNameAttr(buffer, 4, username); }
+
 int generateNAK(struct SBCPMessage *msg, char* reason)
 {
+    if(strlen(reason) + 1 > ATTRREASONMAX) {
+        return -1;
+    }
+
     uint16_t reason_attr_length = (uint16_t) (1 + strlen(reason) + 4);
     struct SBCPAttribute *reasonAttr = buildReasonAttr(reason, reason_attr_length);
     msg->payload[0] = *reasonAttr;
@@ -115,11 +174,19 @@ int generateNAK(struct SBCPMessage *msg, char* reason)
     return total_Bytes;
 }
 
+// Return -1 in case of error
+int parseNAK(char buffer[], char **reason) { return readReasonAttr(buffer, 4, reason); }
+
+// Generate JOIN Message
 int generateJOIN(struct SBCPMessage *msg, char *username)
 {
+    // @Required: 'username' field
 
-    // Generate JOIN Message
-    // Required: 'username' field
+    // 1st: Check the message length, if overflow, return -1
+    if(strlen(username) + 1 > ATTRUSERNAMEMAX) {
+        return -1;
+    }
+
     // Setup SBCP message attribute
     uint16_t name_attr_length = (uint16_t) (1 + strlen(username) + 4);
     struct SBCPAttribute *nameAttr = buildNameAttr(username, name_attr_length);
@@ -138,6 +205,10 @@ int generateJOIN(struct SBCPMessage *msg, char *username)
 
 int generateSEND(struct SBCPMessage *msg, char *messages)
 {
+    if(strlen(messages) + 1 > ATTRMESSAGEMAX) {
+        return -1;
+    }
+
     uint16_t message_attr_length = (uint16_t) (1+strlen(messages) + 4);
     struct SBCPAttribute *messageAttr = buildMessageAttr(messages, message_attr_length);
 
@@ -152,10 +223,15 @@ int generateSEND(struct SBCPMessage *msg, char *messages)
     return msg_length;
 }
 
+// Generate ONLINE Message
 int generateONLINE(struct SBCPMessage *msg, char *username)
 {
-    // Generate ONLINE Message
+
     // Required: 'username' field
+    if(strlen(username) + 1 > ATTRUSERNAMEMAX) {
+        return -1;
+    }
+
     // Setup SBCP message attribute
     uint16_t name_attr_length = (uint16_t) (1 + strlen(username) + 4);
     struct SBCPAttribute *nameAttr = buildNameAttr(username, name_attr_length);
@@ -172,10 +248,18 @@ int generateONLINE(struct SBCPMessage *msg, char *username)
     return msg_length;
 }
 
+// Return -1 in case of error
+int parseONLINE(char buffer[], char **username) { return readNameAttr(buffer, 4, username); }
+
+// Generate OFFLINE Message
 int generateOFFLINE(struct SBCPMessage *msg, char *username)
 {
-    // Generate OFFLINE Message
+
     // Required: 'username' field
+    if(strlen(username) + 1 > ATTRUSERNAMEMAX) {
+        return -1;
+    }
+
     // Setup SBCP message attribute
     uint16_t name_attr_length = (uint16_t) (1 + strlen(username) + 4);
     struct SBCPAttribute *nameAttr = buildNameAttr(username, name_attr_length);
@@ -192,9 +276,16 @@ int generateOFFLINE(struct SBCPMessage *msg, char *username)
     return msg_length;
 }
 
+// Return -1 in case of error
+int parseOFFLINE(char buffer[], char **username) { return readNameAttr(buffer, 4, username); }
 
 int generateFWD(struct SBCPMessage *msg, char *username, char *messages)
 {
+    if(strlen(username) + 1 > ATTRUSERNAMEMAX) {
+        return -1;
+    } else if(strlen(messages) + 1 > ATTRMESSAGEMAX) {
+        return -1;
+    }
 
     // Format: nameAttr followed by messageAttr
     int total_Bytes = 4;
@@ -219,6 +310,17 @@ int generateFWD(struct SBCPMessage *msg, char *username, char *messages)
     return total_Bytes;
 }
 
+// Return -1 in case of error
+int parseFWD(char buffer[], char **message, char **username)
+{
+    int cursor = readNameAttr(buffer, 4, username);
+    if(cursor != -1) {
+        return readMessageAttr(buffer, cursor, message);
+    }
+    return -1;
+}
+
+// For now, do not check for this method, assume server will store all valid usernames
 int generateACK(struct SBCPMessage *msg, char* usernames[MAXUSERCOUNT])
 {
 
@@ -259,6 +361,20 @@ int generateACK(struct SBCPMessage *msg, char* usernames[MAXUSERCOUNT])
     free(countAttr);
     return total_Bytes;
 }
+
+int parseACK(char buffer[], int * client_count, char* usernames[MAXUSERCOUNT])
+{
+    int cursor = readCountAttr(buffer, 4, client_count);
+    if(cursor ==  -1){  return -1; }
+    for(int i=0; i<*client_count; i++) {
+        cursor = readNameAttr(buffer, cursor, &usernames[i]);
+        if(cursor ==  -1){  return -1; }
+    }
+    return 0;
+}
+
+
+
 
 int createRawData(char buffer[], struct SBCPMessage *message, int msg_length)
 {
@@ -336,13 +452,6 @@ int createRawData(char buffer[], struct SBCPMessage *message, int msg_length)
     }
     return 0;
 }
-
-
-
-
-
-
-
 
 
 /*  Sample Message Calls

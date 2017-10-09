@@ -9,9 +9,9 @@
 
 
 static uint8_t PROTOCOLVERSION=3;
-static uint8_t JOIN=2;
-static uint8_t SEND=4;
-static uint8_t FWD=3;
+//static uint8_t JOIN=2;
+//static uint8_t SEND=4;
+//static uint8_t FWD=3;
 static uint8_t ATTRREASON=1;
 static uint8_t ATTRUSERNAME=2;
 static uint8_t ATTRCOUNT=3;
@@ -22,11 +22,19 @@ static int ATTRUSERNAMEMAX=16;
 static int ATTRMESSAGEMAX=512;
 
 // Bonus Parts:
-static uint8_t ACK=7;
-static uint8_t NAK=5;
-static uint8_t ONLINE=8;
-static uint8_t OFFLINE=6;
-static uint8_t IDLE=9;
+#define JOIN 2
+#define SEND 4
+#define FWD 3
+#define ACK 7
+#define NAK 5
+#define ONLINE 8
+#define OFFLINE 6
+#define IDLE 9
+//static uint8_t ACK=7;
+//static uint8_t NAK=5;
+//static uint8_t ONLINE=8;
+//static uint8_t OFFLINE=6;
+//static uint8_t IDLE=9;
 
 // Maximum supported User Number
 #define MAXUSERCOUNT 100
@@ -74,6 +82,16 @@ int generateACK(struct SBCPMessage *msg, char* usernames[MAXUSERCOUNT]);
 
 // Generate the raw data into buffer Given A SBCPMessage
 int createRawData(char buffer[], struct SBCPMessage *message, int msg_length);
+
+
+// Parse Data
+int parseSERVERIDLE(char buffer[], char **username);
+int parseNAK(char buffer[], char **reason);
+int parseONLINE(char buffer[], char **username);
+int parseOFFLINE(char buffer[], char **username);
+int parseFWD(char buffer[], char **message, char **username);
+int parseACK(char buffer[], int * client_count, char* usernames[MAXUSERCOUNT]);
+
 
 #endif //ECEN602_WORKSPACE_SBCP_H
 
