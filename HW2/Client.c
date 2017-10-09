@@ -11,11 +11,11 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <time.h>
+#include <sys/time.h>
 #include "SBCP.h"
 
 #define MAXDATASIZE 1000 // max number of characters in a string we can send/get at once, including the '\n' char
-#define IDLETIME 10     // seconds for clients indicating the idle process
+#define IDLETIME 6     // seconds for clients indicating the idle process
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -85,29 +85,6 @@ int send_message(struct SBCPMessage *message, int msg_length, int fd)
     }
     return 0;
 }
-
-
-void setTimeout(int milliseconds)
-{
-    // If milliseconds is less or equal to 0
-    // will be simple return from function without throw error
-    if (milliseconds <= 0) {
-        fprintf(stderr, "Count milliseconds for timeout is less or equal to 0\n");
-        return;
-    }
-
-    // a current time of milliseconds
-    int milliseconds_since = (int) (clock() * 1000 / CLOCKS_PER_SEC);
-
-    // needed count milliseconds of return from this timeout
-    int end = milliseconds_since + milliseconds;
-
-    // wait while until needed time comes
-    do {
-        milliseconds_since = (int) (clock() * 1000 / CLOCKS_PER_SEC);
-    } while (milliseconds_since <= end);
-}
-
 
 
 int main(int argc, char *argv[])
@@ -224,25 +201,27 @@ int main(int argc, char *argv[])
 //    int off_rv = send_message(off_msg, off_msg_len, socket_fd);
 //    free(off_msg);
 
-    //     2nd: ACK message
-//    char* usernames[MAXUSERCOUNT];
-//    memset(&usernames, 0, sizeof usernames);
-//    usernames[0] = "A";
-//    usernames[1] = "J";
-//    usernames[2] = "N";
-//    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-//    int ack_msg_len = generateACK(ack_msg, usernames);
-//    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
-//
-//    free(ack_msg);
+//         2nd: ACK message
+    char* usernames[MAXUSERCOUNT];
+    memset(&usernames, 0, sizeof usernames);
+    usernames[0] = "A";
+    usernames[1] = "J";
+    usernames[2] = "N";
+    struct SBCPMessage *ack_msg= (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
+    int ack_msg_len = generateACK(ack_msg, usernames);
+    int ack_rv = send_message(ack_msg, ack_msg_len, socket_fd);
+
+    free(ack_msg);
 
     fd_set master;
+    FD_ZERO(&master);
     struct timeval tv;
     tv.tv_sec = IDLETIME;
 
     while(1)  {
         FD_SET(0, &master);
         FD_SET(socket_fd, &master);
+        int start_time_msec = (int) (clock() * 1000 / CLOCKS_PER_SEC);
         select(1+socket_fd, &master, NULL, NULL, &tv);
 
 
@@ -268,6 +247,9 @@ int main(int argc, char *argv[])
 
             free(msg);
             memset(&buf, 0, sizeof buf);
+
+            tv.tv_sec = IDLETIME;
+
 
         } else if (FD_ISSET(socket_fd, &master)){
             // You have messages waiting to be displayed in the terminal
@@ -338,6 +320,9 @@ int main(int argc, char *argv[])
 
             memset(&bufRecv, 0, sizeof bufRecv);
             printf("Please keep entering the message:\n");
+
+            int time_passed_msec = (int) (clock() * 1000 / CLOCKS_PER_SEC) - start_time_msec;
+            tv.tv_sec = tv.tv_sec - time_passed_msec / 1000;
         } else {
             // Timeout
             printf("Input timeout. Will send IDLE to server.\n");
@@ -351,12 +336,14 @@ int main(int argc, char *argv[])
             }
 
             free(idle_msg);
+
+            tv.tv_sec = IDLETIME;
         }
 
         if(socket_fd > 10000) {
             break;
         }
-
+        FD_ZERO(&master);
     }
 
     /* End of Program */
