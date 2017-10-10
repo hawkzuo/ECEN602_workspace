@@ -2,9 +2,6 @@
 .idea/
 cmake-build-debug/
 
-#ignore text file
-CMakeLists.txt
-
 # ignore system libs
 include/
 

@@ -82,7 +82,7 @@ int send_message(struct SBCPMessage *message, int msg_length, int fd)
         perror("Send Message: writen");
         return -1;
     } else {
-        printf("Successfully sent %zi bytes.\n", send_count);
+//        printf("Successfully sent %zi bytes.\n", send_count);
     }
     return 0;
 }
@@ -303,8 +303,8 @@ int main(int argc, char** argv)
                                         fdtable[current_user_count] = i;
                                         current_user_count ++;
 
-                                        // Send ACK back
-                                        if(current_user_count > 1) {
+                                        // Send ACK back to this client
+                                        if(current_user_count >= 1) {
                                             struct SBCPMessage *ack_msg = (struct SBCPMessage *) malloc(
                                                     sizeof(struct SBCPMessage));
                                             int ack_msg_len = generateACK(ack_msg, usernames);
@@ -313,6 +313,26 @@ int main(int argc, char** argv)
                                             }
                                             free(ack_msg);
                                         }
+
+                                        // Send ONLINE to any other client
+                                        struct SBCPMessage *online_msg = (struct SBCPMessage *) malloc(
+                                                sizeof(struct SBCPMessage));
+                                        int online_msg_len = generateONLINE(online_msg, user);
+
+                                        for (j = 0; j <= fdmax; j++) {
+                                            // send to everyone!
+                                            if (FD_ISSET(j, &master)) {
+                                                // except the listener and ourselves
+                                                if (j != listener && j != i) {
+                                                    if (send_message(online_msg, online_msg_len, j) == -1) {
+                                                        perror("send");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        free(online_msg);
+
+
                                     } else {
                                         // Reject & send NAK back
                                         struct SBCPMessage *nak_msg = (struct SBCPMessage *) malloc(
@@ -349,10 +369,10 @@ int main(int argc, char** argv)
                         }
                         printf("Number Bytes Recv: %zu\n", received_count);
 
-                        printf("Received:\n");
-                        for(int ii=0; ii<received_count; ii++) {
-                            printf("Binary: %s\n", byte_to_binary(buf[ii]));
-                        }
+//                        printf("Received:\n");
+//                        for(int ii=0; ii<received_count; ii++) {
+//                            printf("Binary: %s\n", byte_to_binary(buf[ii]));
+//                        }
 
                         char * sender;
                         char * messages;

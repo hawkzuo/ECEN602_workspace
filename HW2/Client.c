@@ -81,7 +81,7 @@ int send_message(struct SBCPMessage *message, int msg_length, int fd)
         perror("Send Message: writen");
         return -1;
     } else {
-        printf("Successfully sent %zi bytes.\n", send_count);
+//        printf("Successfully sent %zi bytes.\n", send_count);
     }
     return 0;
 }
@@ -210,9 +210,10 @@ int main(int argc, char *argv[])
                 }
             }
 
+            printf("Please continue entering the message:\n");
+
             free(msg);
             memset(&buf, 0, sizeof buf);
-
             tv.tv_sec = IDLETIME;
 
 
@@ -233,7 +234,7 @@ int main(int argc, char *argv[])
             if(received_count >= 4 && (((uint8_t)bufRecv[2] * 256) + (uint8_t)bufRecv[3] == received_count) ) {
                 message_type = bufRecv[1] & 0x7f;
 
-                printf("Number Bytes Recv: %zu\n", received_count);
+//                printf("Number Bytes Recv: %zu\n", received_count);
 
                 char * user;
                 char * messageRecv;
@@ -246,38 +247,38 @@ int main(int argc, char *argv[])
                         if( parseACK(bufRecv, &client_count, users) != -1) {
                             printf("ACK Received. Current users count: %d\n", client_count);
                             for(int i=0; i<client_count; i++) {
-                                printf("User '%s' is online. \n", users[i]);
+                                printf("\tACK: User '%s' is online. \n", users[i]);
                             }
                         }
                         break;
                     case FWD:
                         if( parseFWD(bufRecv, &messageRecv, &user) != -1 ) {
-                            printf("User '%s' says: \n%s\n", user, messageRecv);
+                            printf("FWD:\n\t User '%s' says: \n%s", user, messageRecv);
                             free(user);
                             free(messageRecv);
                         }
                         break;
                     case NAK:
                         if( parseNAK(bufRecv, &nakReason) != -1 ) {
-                            printf("Server refused connection and says: \n%s\n", nakReason);
+                            printf("NAK:\n\tServer refused connection and says: \n%s\n", nakReason);
                             free(nakReason);
                         }
                         break;
                     case ONLINE:
                         if( parseONLINE(bufRecv, &user) != -1) {
-                            printf("User '%s' is online.\n", user);
+                            printf("ONLINE:\n\t User '%s' is online.\n", user);
                             free(user);
                         }
                         break;
                     case OFFLINE:
                         if( parseOFFLINE(bufRecv, &user) != -1) {
-                            printf("User '%s' is offline.\n", user);
+                            printf("OFFLINE:\n\t User '%s' is offline.\n", user);
                             free(user);
                         }
                         break;
                     case IDLE:
                         if( parseSERVERIDLE(bufRecv, &user) != -1) {
-                            printf("User '%s' is idle.\n", user);
+                            printf("IDLE:\n\t User '%s' is idle.\n", user);
                             free(user);
                         }
                         break;
