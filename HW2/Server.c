@@ -104,7 +104,7 @@ int main(int argc, char** argv)
     char buf[MAXDATASIZE+1]; // buffer for client data
     char remoteIP[INET6_ADDRSTRLEN];
     ssize_t received_count;
-    int message_type;
+    int message_type = -1;  // Dummy init value
 
     int yes=1;
     int i,j,rv;
@@ -117,8 +117,8 @@ int main(int argc, char** argv)
     int userstatus[MAXUSERCOUNT];
     int fdtable[MAXUSERCOUNT];
 
-    char *nak_reason = "Room is Full\n";
-
+    char *nak_full = "Room is Full. \n";
+    char *nak_duplicate = "Username already exists. \n";
 
 
     FD_ZERO(&master); // clear the master and temp sets
@@ -284,30 +284,53 @@ int main(int argc, char** argv)
                         } else {
                             char * user;
                             if ( parseJOIN(buf, &user) != -1) {
-                                // Check Username dup first
                                 if(current_user_count < MAXUSER) {
-                                    usernames[current_user_count] = user;
-                                    userstatus[current_user_count] = ONLINE;
-                                    fdtable[current_user_count] = i;
-                                    current_user_count ++;
 
-                                    // Send ACK back
-                                    if(current_user_count > 1) {
-                                        struct SBCPMessage *ack_msg = (struct SBCPMessage *) malloc(
-                                                sizeof(struct SBCPMessage));
-                                        int ack_msg_len = generateACK(ack_msg, usernames);
-                                        if ( send_message(ack_msg, ack_msg_len, i) == -1) {
-                                            perror("send");
+                                    // Check Username dup first
+                                    int hasDuplicate = 0;
+
+                                    for(int ii=0; ii<current_user_count; ii++) {
+                                        if(strcmp(usernames[ii], user) == 0) {
+                                            hasDuplicate = 1;
+                                            break;
                                         }
-                                        free(ack_msg);
                                     }
 
+                                    if(!hasDuplicate) {
+                                        // Accept & send ACK back
+                                        usernames[current_user_count] = user;
+                                        userstatus[current_user_count] = ONLINE;
+                                        fdtable[current_user_count] = i;
+                                        current_user_count ++;
+
+                                        // Send ACK back
+                                        if(current_user_count > 1) {
+                                            struct SBCPMessage *ack_msg = (struct SBCPMessage *) malloc(
+                                                    sizeof(struct SBCPMessage));
+                                            int ack_msg_len = generateACK(ack_msg, usernames);
+                                            if ( send_message(ack_msg, ack_msg_len, i) == -1) {
+                                                perror("send");
+                                            }
+                                            free(ack_msg);
+                                        }
+                                    } else {
+                                        // Reject & send NAK back
+                                        struct SBCPMessage *nak_msg = (struct SBCPMessage *) malloc(
+                                                sizeof(struct SBCPMessage));
+                                        int nak_msg_len = generateNAK(nak_msg, nak_duplicate);
+                                        if ( send_message(nak_msg, nak_msg_len, i) == -1) {
+                                            perror("send");
+                                        }
+                                        free(nak_msg);
+                                        close(i); // bye!
+                                        FD_CLR(i, &master); // remove from master set
+                                    }
 
                                 } else {
                                     // Send NAK back & close connection
                                     struct SBCPMessage *nak_msg = (struct SBCPMessage *) malloc(
                                             sizeof(struct SBCPMessage));
-                                    int nak_msg_len = generateNAK(nak_msg, nak_reason);
+                                    int nak_msg_len = generateNAK(nak_msg, nak_full);
                                     if ( send_message(nak_msg, nak_msg_len, i) == -1) {
                                         perror("send");
                                     }
