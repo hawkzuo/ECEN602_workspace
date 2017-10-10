@@ -225,7 +225,39 @@ int main(int argc, char** argv)
                         if (received_count == 0) {
                             // connection closed
                             // Require extra checking here
+                            int index = -1;
+                            // 1. Find the index
+                            for(int ii=0; ii<current_user_count;ii++) {
+                                if(fdtable[ii] == i) {
+                                    index = ii;
+                                    break;
+                                }
+                            }
+                            // 2. Remove index element & swap the last element & reduce count by 1
+                            struct SBCPMessage *offline_msg = (struct SBCPMessage *) malloc(
+                                    sizeof(struct SBCPMessage));
+                            int offline_msg_len = generateOFFLINE(offline_msg, usernames[index]);
 
+                            usernames[index] = usernames[current_user_count-1];
+                            userstatus[index] = userstatus[current_user_count-1];
+                            fdtable[index] = fdtable[current_user_count-1];
+                            usernames[current_user_count-1] = NULL;
+                            userstatus[current_user_count-1] = 0;
+                            fdtable[current_user_count-1] = 0;
+                            current_user_count --;
+
+                            for (j = 0; j <= fdmax; j++) {
+                                // send to everyone!
+                                if (FD_ISSET(j, &master)) {
+                                    // except the listener and ourselves
+                                    if (j != listener && j != i) {
+                                        if (send_message(offline_msg, offline_msg_len, j) == -1) {
+                                            perror("send");
+                                        }
+                                    }
+                                }
+                            }
+                            free(offline_msg);
 
                             printf("selectserver: socket %d hung up\n", i);
                         } else {
