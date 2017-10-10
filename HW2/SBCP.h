@@ -87,6 +87,8 @@ int createRawData(char buffer[], struct SBCPMessage *message, int msg_length);
 // Parse Data
 int parseSERVERIDLE(char buffer[], char **username);
 int parseNAK(char buffer[], char **reason);
+int parseJOIN(char buffer[], char **username);
+int parseSEND(char buffer[], char **messages);
 int parseONLINE(char buffer[], char **username);
 int parseOFFLINE(char buffer[], char **username);
 int parseFWD(char buffer[], char **message, char **username);

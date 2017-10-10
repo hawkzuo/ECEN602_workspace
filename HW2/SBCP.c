@@ -203,6 +203,10 @@ int generateJOIN(struct SBCPMessage *msg, char *username)
     return msg_length;
 }
 
+int parseJOIN(char buffer[], char **username) { return readNameAttr(buffer, 4, username);   }
+
+
+
 int generateSEND(struct SBCPMessage *msg, char *messages)
 {
     if(strlen(messages) + 1 > ATTRMESSAGEMAX) {
@@ -222,6 +226,9 @@ int generateSEND(struct SBCPMessage *msg, char *messages)
     free(messageAttr);
     return msg_length;
 }
+
+int parseSEND(char buffer[], char **messages) { return readMessageAttr(buffer, 4, messages);   }
+
 
 // Generate ONLINE Message
 int generateONLINE(struct SBCPMessage *msg, char *username)
