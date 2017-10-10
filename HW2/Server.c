@@ -16,7 +16,6 @@
 #define BACKLOG 10 // how many pending connections queue will hold
 #define MAXDATASIZE 1000 // max number of characters in a string we can send/get at once, including the '\n' char
 
-#define MAXUSER 2
 
 
 // get sockaddr, IPv4 or IPv6:
@@ -125,8 +124,8 @@ int main(int argc, char** argv)
     FD_ZERO(&read_fds);
 
 	/*	This part checks the input format and record the assigned port number		*/
-	if(argc != 2) {
-		fprintf(stderr, "Number of arguments error, expected: 2, got: %d\n", argc);
+	if(argc != 4) {
+		fprintf(stderr, "Number of arguments error, expected: 4, got: %d\n", argc);
 		exit(1);
 	}
 
@@ -136,10 +135,14 @@ int main(int argc, char** argv)
 	hints.ai_family = AF_UNSPEC;			// use IPv4 for HW1
 	hints.ai_socktype = SOCK_STREAM;	// TCP
 	hints.ai_flags = AI_PASSIVE; 		// use my IP
-	if ((rv = getaddrinfo(NULL, argv[1], &hints, &servinfo)) != 0) {
+	if ((rv = getaddrinfo(argv[1], argv[2], &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
+	
+	int max_user = atoi(argv[3]);
+	printf("maximum number of user: %d", max_user);
+	
 
 	// loop through all the results and bind to the first we can
 	for(p = servinfo; p != NULL; p = p->ai_next) {
@@ -284,7 +287,7 @@ int main(int argc, char** argv)
                         } else {
                             char * user;
                             if ( parseJOIN(buf, &user) != -1) {
-                                if(current_user_count < MAXUSER) {
+                                if(current_user_count < max_user) {
 
                                     // Check Username dup first
                                     int hasDuplicate = 0;
