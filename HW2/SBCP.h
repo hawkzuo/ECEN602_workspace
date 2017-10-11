@@ -37,7 +37,7 @@ static int ATTRMESSAGEMAX=512;
 //static uint8_t IDLE=9;
 
 // Maximum supported User Number
-#define MAXUSERCOUNT 100
+#define MAXUSERCOUNT 101
 
 struct SBCPAttribute {
     unsigned char attr_header[4];

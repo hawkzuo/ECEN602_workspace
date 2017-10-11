@@ -111,14 +111,20 @@ int main(int argc, char** argv)
     struct addrinfo hints, *servinfo, *p;
 
 
+    // These data structures are used to store Connected users in the chat room.
     char* usernames[MAXUSERCOUNT];
     int current_user_count = 0;
     int userstatus[MAXUSERCOUNT];
     int fdtable[MAXUSERCOUNT];
 
+    // These are pre-defined NAK reasons
     char *nak_full = "Room is Full. \n";
     char *nak_duplicate = "Username already exists. \n";
 
+    // These are names of each message type.
+    char *message_types[10] = {"","","JOIN","FWD","SEND","NAK","OFFLINE","ACK","ONLINE","IDLE"};
+
+    /* Main program starts here */
 
     FD_ZERO(&master); // clear the master and temp sets
     FD_ZERO(&read_fds);
@@ -141,7 +147,13 @@ int main(int argc, char** argv)
 	}
 	
 	int max_user = atoi(argv[3]);
-	printf("maximum number of user: %d", max_user);
+
+    if(max_user > MAXUSERCOUNT - 1) {
+        printf("The server can only support at most %d users. Please reenter the user count.\n", MAXUSERCOUNT-1);
+        exit(10);
+    }
+
+	printf("Maximum number of user: %d. \n", max_user);
 	
 
 	// loop through all the results and bind to the first we can
@@ -262,7 +274,7 @@ int main(int argc, char** argv)
                             }
                             free(offline_msg);
 
-                            printf("selectserver: socket %d hung up\n", i);
+//                            printf("selectserver: socket %d hung up\n", i);
                         } else {
                             perror("recv");
                         }
@@ -271,6 +283,9 @@ int main(int argc, char** argv)
                         if(newfd == i) {
                             newfd = 0;
                         }
+
+                        printf("selectserver: closed connection on socket %d\n", i);
+
                     } else if(newfd == i) {
                         // Meaning newly JOIN message should be received
                         
@@ -278,12 +293,15 @@ int main(int argc, char** argv)
                         if(received_count >= 4 && (((uint8_t)buf[2] * 256) + (uint8_t)buf[3] == received_count) ) {
                             message_type = buf[1] & 0x7f;
                         }
-                        printf("Number Bytes Recv: %zu\n", received_count);
+
+                        printf("Number Bytes Recv: %zu. \tMessage Type: %s.\n", received_count, message_types[message_type]);
 
                         if(message_type != JOIN) {
                             // The client does not follow rules, close connection
                             close(i); // bye!
                             FD_CLR(i, &master); // remove from master set
+                            printf("selectserver: closed connection on socket %d\n", i);
+
                         } else {
                             char * user;
                             if ( parseJOIN(buf, &user) != -1) {
@@ -347,6 +365,7 @@ int main(int argc, char** argv)
                                         free(nak_msg);
                                         close(i); // bye!
                                         FD_CLR(i, &master); // remove from master set
+                                        printf("selectserver: closed connection on socket %d\n", i);
                                     }
 
                                 } else {
@@ -360,6 +379,7 @@ int main(int argc, char** argv)
                                     free(nak_msg);
                                     close(i); // bye!
                                     FD_CLR(i, &master); // remove from master set
+                                    printf("selectserver: closed connection on socket %d\n", i);
                                 }
                             }
                         }
@@ -370,7 +390,7 @@ int main(int argc, char** argv)
                         if(received_count >= 4 && (((uint8_t)buf[2] * 256) + (uint8_t)buf[3] == received_count) ) {
                             message_type = buf[1] & 0x7f;
                         }
-                        printf("Number Bytes Recv: %zu\n", received_count);
+                        printf("Number Bytes Recv: %zu. \tMessage Type: %s.\n", received_count, message_types[message_type]);
 
 //                        printf("Received:\n");
 //                        for(int ii=0; ii<received_count; ii++) {

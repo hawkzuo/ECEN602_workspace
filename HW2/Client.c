@@ -182,11 +182,13 @@ int main(int argc, char *argv[])
     FD_ZERO(&master);
     struct timeval tv;
     tv.tv_sec = IDLETIME;
+    time_t start_time;
+
 
     while(1)  {
         FD_SET(0, &master);
         FD_SET(socket_fd, &master);
-        int start_time_msec = (int) (clock() * 1000 / CLOCKS_PER_SEC);
+        time(&start_time);
         select(1+socket_fd, &master, NULL, NULL, &tv);
 
 
@@ -292,9 +294,9 @@ int main(int argc, char *argv[])
             memset(&bufRecv, 0, sizeof bufRecv);
 
 
-
-            int time_passed_msec = (int) (clock() * 1000 / CLOCKS_PER_SEC) - start_time_msec;
-            tv.tv_sec = tv.tv_sec - time_passed_msec / 1000;
+            int time_passed_sec = (int) (time(NULL) - start_time);
+            tv.tv_sec = tv.tv_sec - time_passed_sec;
+//            printf("[IDLE Timer left(in seconds): %li]\n", tv.tv_sec);
         } else {
             // Timeout
             printf("Input timeout. Will send IDLE to server.\n");
