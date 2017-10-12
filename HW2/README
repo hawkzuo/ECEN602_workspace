@@ -1,25 +1,28 @@
-This assignment implements the client and server for a simple TCP echo
-service.
+This assignment implements the client and server for a chat service.
 
 Team role:
-Jianyu Zuo implements the server program and read method. Jimin Wen implements the client program and testing.
+Jianyu Zuo implements the server program. Jimin Wen implements the client program and testing.
 
 Useage:
 run make command to lanuch makefile generating executable two files for the project, Client and Server. run make clean to remove all the 
-generated files from the directory. 
-To lanuch the client. The running command follows the pattern: ./Client echos hostname portnumber
-To lanuch the server. The running command follows the pattern: ./Server echos portnumber
+generated object files and executable files from the directory. First lanuch the server and then lanuch
+To lanuch the server. The running command follows the pattern: ./server ip_address portnumber max_user_number
+To lanuch the client. The running command follows the pattern: ./client username ip_address portnumber
+
 
 Implementation:
+The program contains executable programs on client side and server side. SBCP and readFast are implements to provide functions support for the client and server
+programs.
+
 On client side: 
-The program first implements input validation, get address information and connect to the host. After the connection has been made, the 
-client waits for the user input. The input would be sent to server with written method. The received message from the server is read via
-readFast() in the readFast.c. 
+The program first implements input validation, get address information and sends join request to the host. After the connection has been made, the 
+client waits for the user input. The input would be sent to server with written method. The received message from the server would be parsed and 
+relevant information would be represented on the screen.
 
 On the server side:
-The program first implements input validation, get address information, bind the socket to the dedicated port number and listen to the 
-socket. The socket accepts new connection when new request is received. The server read sent message calling recv() method and sends it
-back to the client with written().
+The program first implements input validation, get address information and max_user_number, bind the socket to the dedicated port number and listen to the 
+socket. Then it listens to file discriptors with select() method. On rereiving new message, the server judges whether it is a new connection from a client 
+or a already established client and implements required response. 
 
 Errata:
 Server: input arguments error, get address information error, fail to bind server error, error sending the line.
