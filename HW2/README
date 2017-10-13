@@ -24,6 +24,6 @@ The program first implements input validation, get address information and max_u
 socket. Then it listens to file discriptors with select() method. On rereiving new message, the server judges whether it is a new connection from a client 
 or a already established client and implements required response. 
 
-Errata:
+Some of Errata:
 Server: input arguments error, get address information error, fail to bind server error, error sending the line.
-Client: input arguments error, get address information error, fail to connect error, input size exceed error, error sending a line,
+Client: input arguments error, get address information error, fail to connect error, input size exceed error, error sending a line.
