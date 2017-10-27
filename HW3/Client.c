@@ -8,6 +8,7 @@
 #include <string.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include "TFTP.h"
 
 #define MAXBUFLEN 513
 
@@ -55,8 +56,16 @@ int main(int argc, char *argv[])
         return 3;
     }
 
+    char* rrqMsg;
+    int rrqSize = generateRRQ(&rrqMsg, argv[2], OCTET);
 
-    if ((numbytes = sendto(sockfd, argv[2], strlen(argv[2]), 0,
+    printf("Byte View:\n");
+    for(int i=0;i<rrqSize;i++) {
+        printf("%s\n", byte_to_binary(*(rrqMsg+i)));
+    }
+
+
+    if ((numbytes = sendto(sockfd, rrqMsg, (size_t) rrqSize, 0,
                            p->ai_addr, p->ai_addrlen)) == -1) {
         perror("talker: sendto");
         exit(1);

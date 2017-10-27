@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include "TFTP.h"
 
 #define MYPORT "4950" // the port users will be connecting to
 #define MAXBUFLEN 513
@@ -127,6 +128,8 @@ int main(void)
 					close(newfd);
 					exit(0);
 				}
+
+
 			}
 
 
