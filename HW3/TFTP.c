@@ -69,6 +69,26 @@ int parseDATA(char** message, uint16_t* seqNum, const char buffer[], ssize_t dat
     }
 }
 
+int generateACK(char ackMsg[], uint16_t seqNum)
+{
+    ackMsg[0] = (uint8_t)0;
+    ackMsg[1] = (uint8_t)ACK;
+    ackMsg[3] = (uint8_t)seqNum >> 8;
+    ackMsg[4] = (uint8_t)seqNum & (uint8_t)0xFF;
+    return 0;
+}
+
+int parseACK(uint16_t* seqNum, const char buffer[], ssize_t dataSize)
+{
+    if(dataSize == 4 && buffer[0] == (uint8_t)0 && buffer[1] == (uint8_t)ACK ) {
+        *seqNum = ((uint16_t)buffer[2] << 8) + (uint16_t)buffer[3];
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+
 
 
 /* Binary View Helper */

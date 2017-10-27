@@ -40,8 +40,6 @@ int readable_timeo(int fd, int sec) {
 }
 
 
-
-
 int main(void)
 {
 	int sockfd=-1;
@@ -137,7 +135,7 @@ int main(void)
 			bind(newfd, (struct sockaddr *)&my_addr, sizeof my_addr);
 
 			// Lacking parsing filename
-			int fd = open("/Users/jianyuzuo/Workspaces/ECEN602_workspace/HW3/abcd.txt", O_RDONLY);
+			int fd = open(filename, O_RDONLY);
 			char fileBuffer[MAXSENDBUFLEN+1];
 			uint16_t seqNum = 1;
 			ssize_t file_read_count = read(fd, fileBuffer, MAXSENDBUFLEN);
@@ -147,9 +145,11 @@ int main(void)
 //					printf("Start Sending: \n");
 					char dataMsg[file_read_count+4];
 					if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
+						// Create a Helper Named SendWithRetry
 						int retries = 0;
 						sendto(newfd, dataMsg, sizeof dataMsg, 0,
 							   (struct sockaddr *)&their_addr, addr_len);
+						// Retry Logic
 						while(retries <= 10 ) {
 							if(readable_timeo(newfd, 1) <= 0) {
 								// Timeout
@@ -164,53 +164,73 @@ int main(void)
 									   (struct sockaddr *)&their_addr, addr_len);
 							} else {
 								// We might receive an ACK
-
+								ssize_t received_count;
+								uint16_t received_seq_num;
+								char ackBuf[5];
+								if ((received_count = recvfrom(newfd, ackBuf, 4 , 0,
+														 (struct sockaddr *)&their_addr, &addr_len)) == -1 ||
+										received_count != 4) {
+									perror("recvfrom:ACK");
+									exit(1);
+								}
+								if(parseACK(&received_seq_num, ackBuf, 4) == 0) {
+									break;
+								}
 							}
 						}
-
 
 						// Lacking Wrap-Around
 						seqNum++;
 					}
 					file_read_count = read(fd, fileBuffer, MAXSENDBUFLEN);
 				} else {
-//					printf("Start Sending: \n");
 					char dataMsg[file_read_count+4];
 					if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
+
+						int retries = 0;
 						sendto(newfd, dataMsg, sizeof dataMsg, 0,
 							   (struct sockaddr *)&their_addr, addr_len);
+						// Retry Logic
+						while(retries <= 10 ) {
+							if(readable_timeo(newfd, 1) <= 0) {
+								// Timeout
+								if(retries >= 10) {
+									printf("Retry Times is maximum. Will close connection\n");
+									close(newfd);
+									exit(0);
+								}
+								retries ++;
+								printf("Retry Times: %d\n", retries);
+								sendto(newfd, dataMsg, sizeof dataMsg, 0,
+									   (struct sockaddr *)&their_addr, addr_len);
+							} else {
+								// We might receive an ACK
+								ssize_t received_count;
+								uint16_t received_seq_num;
+								char ackBuf[5];
+								if ((received_count = recvfrom(newfd, ackBuf, 4 , 0,
+															   (struct sockaddr *)&their_addr, &addr_len)) == -1 ||
+										received_count != 4) {
+									perror("recvfrom:ACK");
+									exit(1);
+								}
+								if(parseACK(&received_seq_num, ackBuf, 4) == 0) {
+									break;
+								}
+							}
+						}
 					}
 					printf("Success at sending %d packets DATA.\n", seqNum);
 					break;
 				}
 			}
 
-//			char test1[4] = "abc";char test2[4] = "abc";char test3[4] = "abc";
-//
-//			int retries = 0;
-//			sendto(newfd, test1, sizeof test1, 0,
-//				   (struct sockaddr *)&their_addr, addr_len);
-//			while(readable_timeo(newfd, 1) <= 0) {
-//				// Timeout
-//				retries ++;
-//				printf("Retry Times: %d\n", retries);
-//				sendto(newfd, test1, sizeof test1, 0,
-//					   (struct sockaddr *)&their_addr, addr_len);
-//				if(retries >= 10) {
-//					printf("Retry Times is maximum. Will close connection\n");
-//					close(newfd);
-//					exit(0);
-//				}
-////			}
-//			sendto(newfd, test2, sizeof test2, 0,
-//				   (struct sockaddr *)&their_addr, addr_len);
-//			sendto(newfd, test3, sizeof test3, 0,
-//				   (struct sockaddr *)&their_addr, addr_len);
-
+			printf("Will close connection \n");
 			close(newfd);
 			exit(0);
 		}
 
+		// Parent Process does not need this
 		close(newfd);
 	}
 

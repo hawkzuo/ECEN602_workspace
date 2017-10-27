@@ -1,0 +1,2 @@
+1. If Added txt files to Git, then \n will be replaced by \r\n, which resulted behavior changes
+

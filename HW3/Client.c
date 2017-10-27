@@ -59,10 +59,10 @@ int main(int argc, char *argv[])
     char* rrqMsg;
     int rrqSize = generateRRQ(&rrqMsg, argv[2], OCTET);
 
-    printf("Byte View:\n");
-    for(int i=0;i<rrqSize;i++) {
-        printf("%s\n", byte_to_binary(*(rrqMsg+i)));
-    }
+//    printf("Byte View:\n");
+//    for(int i=0;i<rrqSize;i++) {
+//        printf("%s\n", byte_to_binary(*(rrqMsg+i)));
+//    }
 
 
     if ((numbytes = sendto(sockfd, rrqMsg, (size_t) rrqSize, 0,
@@ -87,17 +87,24 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        printf("Received Byte View:\n");
-        for(int i=0;i<recvcount;i++) {
-            printf("%s\n", byte_to_binary(recvBuf[i]));
-        }
+//        printf("Received Byte View:\n");
+//        for(int i=0;i<recvcount;i++) {
+//            printf("%s\n", byte_to_binary(recvBuf[i]));
+//        }
 
         char* msg;
+        char ackMsg[4];
 
         if(parseDATA(&msg, &seqNum, recvBuf, recvcount) == 0) {
+            printf("Data received for Packet NO %d, with content:\n%s\n", seqNum,msg);
             if(desiredSeq == seqNum) {
                 // Success Print on screen & send ACK back
-                printf("Data received for Packet NO %d, with content:\n%s\n", seqNum,msg);
+                if(generateACK(ackMsg, seqNum) == 0) {
+                    // Send to Server
+                    sendto(sockfd, ackMsg, (size_t) 4, 0,
+                           (struct sockaddr *)&their_addr, addr_len);
+                }
+
                 if(recvcount-4 != MAXSENDBUFLEN) {
                     // Last frame
                     break;
@@ -106,11 +113,8 @@ int main(int argc, char *argv[])
                 }
 
             }
-
         }
-
         memset(&recvBuf, 0, sizeof recvBuf);
-
     }
 
 

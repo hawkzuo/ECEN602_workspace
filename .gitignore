@@ -13,3 +13,6 @@ include/
 
 # ignore .o files
 *.o
+
+# ignore .txt test files
+*.txt
