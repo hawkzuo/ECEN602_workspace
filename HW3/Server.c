@@ -99,6 +99,24 @@ int main(void)
 			continue;
 		}
 		buf[numbytes] = '\0';
+
+		char* filename;
+		char* mode;
+		if(parseRRQ(&filename, &mode, buf, numbytes) == 0) {
+			printf("Filename: %s\n", filename);
+			printf("Mode: %s\n", mode);
+		} else {
+			printf("Unacceptable RRQ packet.\n");
+			continue;
+		}
+
+		printf("Byte View:\n");
+		for(int i=0;i<numbytes;i++) {
+			printf("%s\n", byte_to_binary(buf[i]));
+		}
+
+
+
 		newfd = socket(AF_INET, SOCK_DGRAM, 0);
 
 		if (!fork()) { // this is the child process

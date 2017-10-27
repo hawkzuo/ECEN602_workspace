@@ -8,12 +8,10 @@
 
 int generateRRQ(char** rrqMsg, const char* filename, const char* mode)
 {
-
-    if(strcmp(mode, OCTET) == 0) {
-        size_t totalLen = strlen(OCTET) + strlen(filename) + 4 + 2;
+    if(strcmp(mode, OCTET) == 0 || strcmp(mode, NETASCII) == 0) {
+        size_t totalLen = strlen(filename) + 1 + 6 + 4;
         *rrqMsg = malloc(totalLen*sizeof(char));
         char * ptr = *rrqMsg;
-//        int buffer_index = 0;
 
         *ptr++ = (char)0;
         *ptr++ = (char)RRQ;
@@ -24,39 +22,33 @@ int generateRRQ(char** rrqMsg, const char* filename, const char* mode)
         for(int i=0;i<strlen(mode);i++) {
             *ptr++ = *(mode+i);
         }
-        *ptr++ = (char)0;
+        *ptr = (char)0;
 
         return (int) totalLen;
 
-
-    } else if(strcmp(mode, NETASCII) == 0) {
-        size_t totalLen = strlen(NETASCII) + strlen(filename) + 4 + 2;
-        *rrqMsg = malloc(totalLen*sizeof(char));
-        int buffer_index = 0;
-
-        *rrqMsg[buffer_index++] = (char)0;
-        *rrqMsg[buffer_index++] = (char)RRQ;
-        for(int i=0;i<strlen(filename);i++) {
-            *rrqMsg[buffer_index++] = *(filename+i);
-        }
-        *rrqMsg[buffer_index++] = (char)0;
-        for(int i=0;i<strlen(mode);i++) {
-            *rrqMsg[buffer_index++] = *(mode+i);
-        }
-        *rrqMsg[buffer_index++] = (char)0;
-
-        if(buffer_index == totalLen) {
-            return buffer_index;
-        } else {
-            return -1;
-        }
 
     } else {
         return -1;
     }
 }
 
+int parseRRQ(char** filename, char** mode, char buffer[], ssize_t dataSize)
+{
+    if(dataSize > 10 && buffer[0] == (char)0 && buffer[1] == (char)RRQ) {
+        *filename = malloc((dataSize-10)*sizeof(char));
+        *mode = malloc(6*sizeof(char));
+        strncpy(*filename, buffer+2, dataSize-10);
+        strncpy(*mode, buffer+dataSize-7, 6);
+        return 0;
+    } else {
+        return -1;
+    }
+}
 
+int generateDATA()
+{
+
+}
 
 
 

@@ -12,10 +12,10 @@
 #define ACK 4
 
 static char* OCTET = "octet";
-static char* NETASCII = "netascii";
+static char* NETASCII = "ascii";
 
 int generateRRQ(char** rrqMsg, const char* filename, const char* mode);
-
+int parseRRQ(char** filename, char** mode, char buffer[], ssize_t dataSize);
 
 
 

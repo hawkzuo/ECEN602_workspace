@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     int rv;
     ssize_t numbytes;
 
-    char buf[MAXBUFLEN];
+    char recvBuf[MAXBUFLEN];
     ssize_t recvcount;
 
     struct sockaddr_storage their_addr;
@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
-// loop through all the results and make a socket
+    // loop through all the results and make a socket
     for(p = servinfo; p != NULL; p = p->ai_next) {
         if ((sockfd = socket(p->ai_family, p->ai_socktype,
                              p->ai_protocol)) == -1) {
@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
     printf("talker: sent %zi bytes to %s\n", numbytes, argv[1]);
 
     while(1) {
-        if ((recvcount = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0,
+        if ((recvcount = recvfrom(sockfd, recvBuf, MAXBUFLEN-1 , 0,
                                  (struct sockaddr *)&their_addr, &addr_len)) == -1) {
             perror("recvfrom");
             exit(1);
@@ -84,8 +84,8 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        printf("Received:\n%s\n", buf);
-        memset(&buf, 0, sizeof buf);
+        printf("Received:\n%s\n", recvBuf);
+        memset(&recvBuf, 0, sizeof recvBuf);
 
     }
 
