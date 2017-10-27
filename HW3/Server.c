@@ -134,96 +134,107 @@ int main(void)
 			memset(my_addr.sin_zero, '\0', sizeof my_addr.sin_zero);
 			bind(newfd, (struct sockaddr *)&my_addr, sizeof my_addr);
 
-			// Lacking parsing filename
-			int fd = open(filename, O_RDONLY);
-			char fileBuffer[MAXSENDBUFLEN+1];
-			uint16_t seqNum = 1;
-			ssize_t file_read_count = read(fd, fileBuffer, MAXSENDBUFLEN);
-			while(file_read_count >= 0 ) {
-				if(file_read_count == MAXSENDBUFLEN) {
-					// Send A full DATA packet
-//					printf("Start Sending: \n");
-					char dataMsg[file_read_count+4];
-					if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
-						// Create a Helper Named SendWithRetry
-						int retries = 0;
-						sendto(newfd, dataMsg, sizeof dataMsg, 0,
-							   (struct sockaddr *)&their_addr, addr_len);
-						// Retry Logic
-						while(retries <= 10 ) {
-							if(readable_timeo(newfd, 1) <= 0) {
-								// Timeout
-								if(retries >= 10) {
-									printf("Retry Times is maximum. Will close connection\n");
-									close(newfd);
-									exit(0);
-								}
-								retries ++;
-								printf("Retry Times: %d\n", retries);
-								sendto(newfd, dataMsg, sizeof dataMsg, 0,
-									   (struct sockaddr *)&their_addr, addr_len);
-							} else {
-								// We might receive an ACK
-								ssize_t received_count;
-								uint16_t received_seq_num;
-								char ackBuf[5];
-								if ((received_count = recvfrom(newfd, ackBuf, 4 , 0,
-														 (struct sockaddr *)&their_addr, &addr_len)) == -1 ||
+			// Two Modes
+			if(strcmp(mode, OCTET) == 0) {
+				// OCTET Mode:
+				int fd = open(filename, O_RDONLY);
+				char fileBuffer[MAXSENDBUFLEN+1];
+				uint16_t seqNum = 1;
+				ssize_t file_read_count = read(fd, fileBuffer, MAXSENDBUFLEN);
+				while(file_read_count >= 0 ) {
+					if(file_read_count == MAXSENDBUFLEN) {
+						// Send A full DATA packet
+						char dataMsg[file_read_count+4];
+						if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
+							// Create a Helper Named SendWithRetry
+							int retries = 0;
+							sendto(newfd, dataMsg, sizeof dataMsg, 0,
+								   (struct sockaddr *)&their_addr, addr_len);
+							// Retry Logic
+							while(retries <= 10 ) {
+								if(readable_timeo(newfd, 1) <= 0) {
+									// Timeout
+									if(retries >= 10) {
+										printf("Retry Times is maximum. Will close connection\n");
+										close(newfd);
+										exit(0);
+									}
+									retries ++;
+									printf("Retry Times: %d\n", retries);
+									sendto(newfd, dataMsg, sizeof dataMsg, 0,
+										   (struct sockaddr *)&their_addr, addr_len);
+								} else {
+									// We might receive an ACK
+									ssize_t received_count;
+									uint16_t received_seq_num;
+									char ackBuf[5];
+									if ((received_count = recvfrom(newfd, ackBuf, 4 , 0,
+																   (struct sockaddr *)&their_addr, &addr_len)) == -1 ||
 										received_count != 4) {
-									perror("recvfrom:ACK");
-									exit(1);
+										perror("recvfrom:ACK");
+										exit(1);
+									}
+									if(parseACK(&received_seq_num, ackBuf, 4) == 0) {
+										break;
+									}
 								}
-								if(parseACK(&received_seq_num, ackBuf, 4) == 0) {
-									break;
+							}
+							// Wrap-Around
+							if(seqNum == 65535) {
+								// Wrap is needed
+								seqNum = 0;
+							} else {
+								seqNum ++;
+							}
+						}
+						file_read_count = read(fd, fileBuffer, MAXSENDBUFLEN);
+					} else {
+						char dataMsg[file_read_count+4];
+						if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
+
+							int retries = 0;
+							sendto(newfd, dataMsg, sizeof dataMsg, 0,
+								   (struct sockaddr *)&their_addr, addr_len);
+							// Retry Logic
+							while(retries <= 10 ) {
+								if(readable_timeo(newfd, 1) <= 0) {
+									// Timeout
+									if(retries >= 10) {
+										printf("Retry Times is maximum. Will close connection\n");
+										close(newfd);
+										exit(0);
+									}
+									retries ++;
+									printf("Retry Times: %d\n", retries);
+									sendto(newfd, dataMsg, sizeof dataMsg, 0,
+										   (struct sockaddr *)&their_addr, addr_len);
+								} else {
+									// We might receive an ACK
+									ssize_t received_count;
+									uint16_t received_seq_num;
+									char ackBuf[5];
+									if ((received_count = recvfrom(newfd, ackBuf, 4 , 0,
+																   (struct sockaddr *)&their_addr, &addr_len)) == -1 ||
+										received_count != 4) {
+										perror("recvfrom:ACK");
+										exit(1);
+									}
+									if(parseACK(&received_seq_num, ackBuf, 4) == 0) {
+										break;
+									}
 								}
 							}
 						}
-
-						// Lacking Wrap-Around
-						seqNum++;
+						printf("Success at sending %d packets DATA.\n", seqNum);
+						break;
 					}
-					file_read_count = read(fd, fileBuffer, MAXSENDBUFLEN);
-				} else {
-					char dataMsg[file_read_count+4];
-					if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
-
-						int retries = 0;
-						sendto(newfd, dataMsg, sizeof dataMsg, 0,
-							   (struct sockaddr *)&their_addr, addr_len);
-						// Retry Logic
-						while(retries <= 10 ) {
-							if(readable_timeo(newfd, 1) <= 0) {
-								// Timeout
-								if(retries >= 10) {
-									printf("Retry Times is maximum. Will close connection\n");
-									close(newfd);
-									exit(0);
-								}
-								retries ++;
-								printf("Retry Times: %d\n", retries);
-								sendto(newfd, dataMsg, sizeof dataMsg, 0,
-									   (struct sockaddr *)&their_addr, addr_len);
-							} else {
-								// We might receive an ACK
-								ssize_t received_count;
-								uint16_t received_seq_num;
-								char ackBuf[5];
-								if ((received_count = recvfrom(newfd, ackBuf, 4 , 0,
-															   (struct sockaddr *)&their_addr, &addr_len)) == -1 ||
-										received_count != 4) {
-									perror("recvfrom:ACK");
-									exit(1);
-								}
-								if(parseACK(&received_seq_num, ackBuf, 4) == 0) {
-									break;
-								}
-							}
-						}
-					}
-					printf("Success at sending %d packets DATA.\n", seqNum);
-					break;
 				}
+			} else if(strcmp(mode, NETASCII) == 0) {
+
+			} else {
+
 			}
+
 
 			printf("Will close connection \n");
 			close(newfd);

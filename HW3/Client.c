@@ -109,7 +109,11 @@ int main(int argc, char *argv[])
                     // Last frame
                     break;
                 } else {
-                    desiredSeq ++;
+                    if(desiredSeq == 65535) {
+                        desiredSeq = 0;
+                    } else {
+                        desiredSeq ++;
+                    }
                 }
 
             }
