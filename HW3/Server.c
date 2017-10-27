@@ -11,10 +11,13 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <fcntl.h>
 #include "TFTP.h"
 
 #define MYPORT "4950" // the port users will be connecting to
 #define MAXBUFLEN 513
+
+
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -81,8 +84,13 @@ int main(void)
 		return 3;
 	}
 
+
+
+
+
+
 	freeaddrinfo(servinfo);
-	printf("listener: waiting to recvfrom...\n");
+	printf("server: waiting to recvfrom...\n");
 	addr_len = sizeof their_addr;
 	while(1) {
 		if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0,
@@ -90,11 +98,11 @@ int main(void)
 			perror("recvfrom");
 			exit(1);
 		}
-		printf("listener: got packet from %s\n",
+		printf("server: got packet from %s\n",
 			   inet_ntop(their_addr.ss_family,
 						 get_in_addr((struct sockaddr *)&their_addr),
 						 s, sizeof s));
-		printf("listener: packet is %zi bytes long\n", numbytes);
+		printf("server: packet is %zi bytes long\n", numbytes);
 		if(numbytes >= MAXBUFLEN) {
 			continue;
 		}
@@ -110,12 +118,10 @@ int main(void)
 			continue;
 		}
 
-		printf("Byte View:\n");
-		for(int i=0;i<numbytes;i++) {
-			printf("%s\n", byte_to_binary(buf[i]));
-		}
-
-
+//		printf("Byte View:\n");
+//		for(int i=0;i<numbytes;i++) {
+//			printf("%s\n", byte_to_binary(buf[i]));
+//		}
 
 		newfd = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -130,38 +136,82 @@ int main(void)
 			memset(my_addr.sin_zero, '\0', sizeof my_addr.sin_zero);
 			bind(newfd, (struct sockaddr *)&my_addr, sizeof my_addr);
 
-			char test1[4] = "abc";char test2[4] = "abc";char test3[4] = "abc";
+			// Lacking parsing filename
+			int fd = open("/Users/jianyuzuo/Workspaces/ECEN602_workspace/HW3/abcd.txt", O_RDONLY);
+			char fileBuffer[MAXSENDBUFLEN+1];
+			uint16_t seqNum = 1;
+			ssize_t file_read_count = read(fd, fileBuffer, MAXSENDBUFLEN);
+			while(file_read_count >= 0 ) {
+				if(file_read_count == MAXSENDBUFLEN) {
+					// Send A full DATA packet
+//					printf("Start Sending: \n");
+					char dataMsg[file_read_count+4];
+					if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
+						int retries = 0;
+						sendto(newfd, dataMsg, sizeof dataMsg, 0,
+							   (struct sockaddr *)&their_addr, addr_len);
+						while(retries <= 10 ) {
+							if(readable_timeo(newfd, 1) <= 0) {
+								// Timeout
+								if(retries >= 10) {
+									printf("Retry Times is maximum. Will close connection\n");
+									close(newfd);
+									exit(0);
+								}
+								retries ++;
+								printf("Retry Times: %d\n", retries);
+								sendto(newfd, dataMsg, sizeof dataMsg, 0,
+									   (struct sockaddr *)&their_addr, addr_len);
+							} else {
+								// We might receive an ACK
 
-			int retries = 0;
-			sendto(newfd, test1, sizeof test1, 0,
-				   (struct sockaddr *)&their_addr, addr_len);
-			while(readable_timeo(newfd, 1) <= 0) {
-				// Timeout
-				retries ++;
-				printf("Retry Times: %d\n", retries);
-				sendto(newfd, test1, sizeof test1, 0,
-					   (struct sockaddr *)&their_addr, addr_len);
-				if(retries >= 10) {
-					printf("Retry Times is maximum. Will close connection\n");
-					close(newfd);
-					exit(0);
+							}
+						}
+
+
+						// Lacking Wrap-Around
+						seqNum++;
+					}
+					file_read_count = read(fd, fileBuffer, MAXSENDBUFLEN);
+				} else {
+//					printf("Start Sending: \n");
+					char dataMsg[file_read_count+4];
+					if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
+						sendto(newfd, dataMsg, sizeof dataMsg, 0,
+							   (struct sockaddr *)&their_addr, addr_len);
+					}
+					printf("Success at sending %d packets DATA.\n", seqNum);
+					break;
 				}
-
-
 			}
 
+//			char test1[4] = "abc";char test2[4] = "abc";char test3[4] = "abc";
+//
+//			int retries = 0;
+//			sendto(newfd, test1, sizeof test1, 0,
+//				   (struct sockaddr *)&their_addr, addr_len);
+//			while(readable_timeo(newfd, 1) <= 0) {
+//				// Timeout
+//				retries ++;
+//				printf("Retry Times: %d\n", retries);
+//				sendto(newfd, test1, sizeof test1, 0,
+//					   (struct sockaddr *)&their_addr, addr_len);
+//				if(retries >= 10) {
+//					printf("Retry Times is maximum. Will close connection\n");
+//					close(newfd);
+//					exit(0);
+//				}
+////			}
+//			sendto(newfd, test2, sizeof test2, 0,
+//				   (struct sockaddr *)&their_addr, addr_len);
+//			sendto(newfd, test3, sizeof test3, 0,
+//				   (struct sockaddr *)&their_addr, addr_len);
 
-			sendto(newfd, test2, sizeof test2, 0,
-				   (struct sockaddr *)&their_addr, addr_len);
-			sendto(newfd, test3, sizeof test3, 0,
-				   (struct sockaddr *)&their_addr, addr_len);
 			close(newfd);
 			exit(0);
 		}
 
 		close(newfd);
-
-
 	}
 
 	close(sockfd);

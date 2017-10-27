@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include "TFTP.h"
 
-#define MAXBUFLEN 513
+#define MAXBUFLEN 517
 
 
 #define SERVERPORT "4950" // the port users will be connecting to
@@ -73,6 +73,9 @@ int main(int argc, char *argv[])
     freeaddrinfo(servinfo);
     printf("talker: sent %zi bytes to %s\n", numbytes, argv[1]);
 
+    uint16_t desiredSeq = 1;
+    uint16_t seqNum = 0;
+
     while(1) {
         if ((recvcount = recvfrom(sockfd, recvBuf, MAXBUFLEN-1 , 0,
                                  (struct sockaddr *)&their_addr, &addr_len)) == -1) {
@@ -84,7 +87,28 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        printf("Received:\n%s\n", recvBuf);
+        printf("Received Byte View:\n");
+        for(int i=0;i<recvcount;i++) {
+            printf("%s\n", byte_to_binary(recvBuf[i]));
+        }
+
+        char* msg;
+
+        if(parseDATA(&msg, &seqNum, recvBuf, recvcount) == 0) {
+            if(desiredSeq == seqNum) {
+                // Success Print on screen & send ACK back
+                printf("Data received for Packet NO %d, with content:\n%s\n", seqNum,msg);
+                if(recvcount-4 != MAXSENDBUFLEN) {
+                    // Last frame
+                    break;
+                } else {
+                    desiredSeq ++;
+                }
+
+            }
+
+        }
+
         memset(&recvBuf, 0, sizeof recvBuf);
 
     }
