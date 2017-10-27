@@ -7,9 +7,9 @@ file( GLOB LIB_HEADERS HW2/readFast.h HW2/SBCP.h )
 add_library( Lib ${LIB_SOURCES} ${LIB_HEADERS} )
 
 set(server_source
-        HW2/Server.c)
+        HW3/Server.c)
 set(client_source
-        HW2/Client.c)
+        HW3/Client.c)
 
 add_executable(Client ${client_source})
 target_link_libraries( Client Lib )

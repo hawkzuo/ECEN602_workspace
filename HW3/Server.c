@@ -12,186 +12,141 @@
 #include <arpa/inet.h>
 #include <signal.h>
 
-#define BACKLOG 10 // how many pending connections queue will hold
-#define PROTOCOL "echos"
-#define MAXDATASIZE 10 // max number of characters in a string we can send/get at once, including the '\n' char
-
-
-
-void sigchld_handler(int s)
-{
-	// waitpid() might overwrite errno, so we save and restore it:
-	int saved_errno = errno;
-	while(waitpid(-1, NULL, WNOHANG) > 0);
-	errno = saved_errno;
-}
-
+#define MYPORT "4950" // the port users will be connecting to
+#define MAXBUFLEN 513
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
 	if (sa->sa_family == AF_INET) {
 		return &(((struct sockaddr_in*)sa)->sin_addr);
 	}
-	
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-// writen n chars to the socket
-ssize_t writen(int fd, void *vptr, size_t n) {
-    size_t nleft;
-    ssize_t nwritten;
-    char *ptr;
 
-    ptr = vptr;
-    nleft = n;
-    while (nleft > 0) {
-        // write is system call
-        if( (nwritten = write(fd, ptr, nleft)) <= 0) {
-            // If error is EINTR, we try looping again
-            if(nwritten <0 && errno == EINTR) {
-                nwritten = 0;
-            } else {
-                // Other error types, will quit
-                return -1;
-            }
-        }
-        nleft -= nwritten;
-        ptr += nwritten;
-    }
-    return n;
+int readable_timeo(int fd, int sec) {
+	fd_set rset;
+	struct timeval tv;
+	FD_ZERO(&rset);
+	FD_SET(fd, &rset);
+	tv.tv_sec = sec;
+	tv.tv_usec = 0;
+
+	return select(fd+1, &rset, NULL,NULL, &tv);
 }
 
 
 
-int main(int argc, char** argv)
+
+int main(void)
 {
-	int socket_fd, new_fd; // listen on sock_fd, new connection on new_fd
+	int sockfd=-1;
+	int newfd;
+
 	struct addrinfo hints, *servinfo, *p;
-	struct sockaddr_storage their_addr; // connector's address information
-	socklen_t sin_size;
-	struct sigaction sa;
-	int yes=1;
-	char s[INET6_ADDRSTRLEN];
 	int rv;
-
-
-	char ip4[INET_ADDRSTRLEN]; 
-
-	// For child process use
-	ssize_t number_read;
-	char buf[MAXDATASIZE+1];
-
-
-	/*	This part checks the input format and record the assigned port number		*/
-	if(argc != 3) {
-		fprintf(stderr, "Number of arguments error, expected: 3, got: %d\n", argc);
-		exit(1);
-	} else if( strcmp(argv[1], PROTOCOL) != 0) {
-		fprintf(stderr, "Unsupported protocol, expected: echos, got: %s\n", argv[1]);
-		exit(1);
-	}
-
-	/* This part do the IP address look-up, creating socket, and bind the port process */
-
-	memset(&hints, 0, sizeof hints);	// Reset to zeros
-	hints.ai_family = AF_UNSPEC;			// use IPv4 for HW1
-	hints.ai_socktype = SOCK_STREAM;	// TCP
-	hints.ai_flags = AI_PASSIVE; 		// use my IP
-	if ((rv = getaddrinfo(NULL, argv[2], &hints, &servinfo)) != 0) {
+	ssize_t numbytes;
+	struct sockaddr_storage their_addr;
+	char buf[MAXBUFLEN];
+	socklen_t addr_len;
+	char s[INET6_ADDRSTRLEN];
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_INET; // set to AF_INET to force IPv4
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_flags = AI_PASSIVE; // use my IP
+	if ((rv = getaddrinfo(NULL, MYPORT, &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
-	// loop through all the results and bind to the first we can
+// loop through all the results and bind to the first we can
 	for(p = servinfo; p != NULL; p = p->ai_next) {
-		if(p->ai_family != AF_INET) {
+		if ((sockfd = socket(p->ai_family, p->ai_socktype,
+							 p->ai_protocol)) == -1) {
+			perror("listener: socket");
 			continue;
 		}
-		if ((socket_fd = socket(p->ai_family, p->ai_socktype,
-					p->ai_protocol)) == -1) {
-			perror("server: socket");
-			continue;
-		}
-		if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes,
-					sizeof(int)) == -1) {
-			perror("setsockopt");
-			exit(1);
-		}
-		if (bind(socket_fd, p->ai_addr, p->ai_addrlen) == -1) {
-			close(socket_fd);
-			perror("server: bind");
+		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+			close(sockfd);
+			perror("listener: bind");
 			continue;
 		}
 		break;
 	}
-	freeaddrinfo(servinfo); // all done with this structure
 	if (p == NULL) {
-		fprintf(stderr, "server: failed to bind\n");
-		exit(1);
+		fprintf(stderr, "listener: failed to bind socket\n");
+		return 2;
+	}
+	if(sockfd == -1) {
+		return 3;
 	}
 
-	/* This part starts the listening process 	*/
-	if (listen(socket_fd, BACKLOG) == -1) {
-		perror("listen");
-		exit(1);
-	} else {
-		// get_in_addr((struct sockaddr *)&their_addr)
-		inet_ntop(AF_INET, get_in_addr(p->ai_addr) , ip4, INET_ADDRSTRLEN);
-		printf("The server starts listening at %s, at port %s.\n", ip4, argv[2] );
-	}
-
-	/*	Multi-process settings */
-	sa.sa_handler = sigchld_handler; // reap all dead processes
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART;
-	if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-		perror("sigaction");
-		exit(1);
-	}
-
-	printf("server: max support characters(including enter char): %d. Waiting for connections...\n", MAXDATASIZE);
-
-	// main accept() loop
-	while(1) { 
-		sin_size = sizeof their_addr;
-		new_fd = accept(socket_fd, (struct sockaddr *)&their_addr, &sin_size);
-		if (new_fd == -1) {
-			perror("accept");
+	freeaddrinfo(servinfo);
+	printf("listener: waiting to recvfrom...\n");
+	addr_len = sizeof their_addr;
+	while(1) {
+		if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0,
+								 (struct sockaddr *)&their_addr, &addr_len)) == -1) {
+			perror("recvfrom");
+			exit(1);
+		}
+		printf("listener: got packet from %s\n",
+			   inet_ntop(their_addr.ss_family,
+						 get_in_addr((struct sockaddr *)&their_addr),
+						 s, sizeof s));
+		printf("listener: packet is %zi bytes long\n", numbytes);
+		if(numbytes >= MAXBUFLEN) {
 			continue;
 		}
+		buf[numbytes] = '\0';
+		newfd = socket(AF_INET, SOCK_DGRAM, 0);
 
-		inet_ntop(their_addr.ss_family,
-				  get_in_addr((struct sockaddr *)&their_addr),
-				  s, sizeof s);
-		printf("server: got connection from %s\n", s);
-		
 		if (!fork()) { // this is the child process
 			// Child process
-			close(socket_fd); // child doesn't need the listener
-			while((number_read = recv(new_fd, buf, sizeof(buf), 0)) > 0) {
-				printf("Received string: %s\n", buf);
-		        if((int)writen(new_fd, buf, strlen(buf)) != strlen(buf)) {
-		            fprintf(stderr, 
-		                "Encounter an error sending lines. Expected:%zi\n", number_read);
-		            printf("Closing connection...\n");
-					close(new_fd);
-					printf("Child process ended.\n");
+			close(sockfd); // child doesn't need the listener
+
+			struct sockaddr_in my_addr;
+			my_addr.sin_family = AF_INET;
+			my_addr.sin_port = htons(0); // short, network byte order
+			my_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+			memset(my_addr.sin_zero, '\0', sizeof my_addr.sin_zero);
+			bind(newfd, (struct sockaddr *)&my_addr, sizeof my_addr);
+
+			char test1[4] = "abc";char test2[4] = "abc";char test3[4] = "abc";
+
+			int retries = 0;
+			sendto(newfd, test1, sizeof test1, 0,
+				   (struct sockaddr *)&their_addr, addr_len);
+			while(readable_timeo(newfd, 1) <= 0) {
+				// Timeout
+				retries ++;
+				printf("Retry Times: %d\n", retries);
+				sendto(newfd, test1, sizeof test1, 0,
+					   (struct sockaddr *)&their_addr, addr_len);
+				if(retries >= 10) {
+					printf("Retry Times is maximum. Will close connection\n");
+					close(newfd);
 					exit(0);
-		        } else {
-		            printf("Sent input string back to the client.\n");
-		        }
-		        memset(&buf, 0, sizeof buf);
+				}
 			}
-			if(number_read < 0) {
-				perror("receive");
-			}
-			printf("Closing connection...\n");
-			close(new_fd);
-			printf("Child process ended.\n");
+
+
+			sendto(newfd, test2, sizeof test2, 0,
+				   (struct sockaddr *)&their_addr, addr_len);
+			sendto(newfd, test3, sizeof test3, 0,
+				   (struct sockaddr *)&their_addr, addr_len);
+			close(newfd);
 			exit(0);
 		}
-		close(new_fd); // parent doesn't need this
+
+		close(newfd);
+
+
 	}
+
+	close(sockfd);
 	return 0;
 }
+
+
 
 
