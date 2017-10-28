@@ -1,13 +1,13 @@
-all: Server Client readFast.o
+all: Server Client
 
-Server: Server.c readFast.o
-	gcc -o Server Server.c readFast.o
+Server: Server.c TFTP.o
+	gcc -o Server Server.c TFTP.o
 
-Client: Client.c readFast.o
-	gcc -o Client Client.c readFast.o
+Client: Client.c TFTP.o
+	gcc -o Client Client.c TFTP.o
 
-readFast.o: readFast.c
-	gcc -c readFast.c 
+TFTP.o: TFTP.c
+	gcc -c TFTP.c
 
 clean:
 	rm *.o
