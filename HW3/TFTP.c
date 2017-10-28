@@ -73,8 +73,8 @@ int generateACK(char ackMsg[], uint16_t seqNum)
 {
     ackMsg[0] = (uint8_t)0;
     ackMsg[1] = (uint8_t)ACK;
-    ackMsg[3] = (uint8_t)seqNum >> 8;
-    ackMsg[4] = (uint8_t)seqNum & (uint8_t)0xFF;
+    ackMsg[2] = (uint8_t)seqNum >> 8;
+    ackMsg[3] = (uint8_t)(seqNum & 0xFF);
     return 0;
 }
 
