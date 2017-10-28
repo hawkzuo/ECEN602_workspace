@@ -11,10 +11,10 @@
 #define DATA 3
 #define ACK 4
 
-#define MAXSENDBUFLEN 10
+#define MAXSENDBUFLEN 512
 
 static char* OCTET = "octet";
-static char* NETASCII = "ascii";
+static char* NETASCII = "netascii";
 
 int generateRRQ(char** rrqMsg, const char* filename, const char* mode);
 int parseRRQ(char** filename, char** mode, char buffer[], ssize_t dataSize);

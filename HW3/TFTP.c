@@ -18,11 +18,11 @@ int generateRRQ(char** rrqMsg, const char* filename, const char* mode)
         for(int i=0;i<=strlen(filename);i++) {
             *ptr++ = *(filename+i);
         }
-        *ptr++ = (char)0;
+//        *ptr++ = (char)0;
         for(int i=0;i<strlen(mode);i++) {
             *ptr++ = *(mode+i);
         }
-        *ptr = (char)0;
+//        *ptr = (char)0;
 
         return (int) totalLen;
 
@@ -35,12 +35,26 @@ int generateRRQ(char** rrqMsg, const char* filename, const char* mode)
 int parseRRQ(char** filename, char** mode, char buffer[], ssize_t dataSize)
 {
     if(dataSize > 10 && buffer[0] == (char)0 && buffer[1] == (char)RRQ) {
-        *filename = malloc((dataSize-10)*sizeof(char));
         *mode = malloc(6*sizeof(char));
-        strncpy(*filename, buffer+2, dataSize-10);
-        strncpy(*mode, buffer+dataSize-7, 6);
+        strncpy(*mode, buffer+dataSize-6, 6);
+        if(strcmp(*mode, OCTET) == 0) {
+            // mode is correct
+            *filename = malloc((dataSize-8)*sizeof(char));
+            strncpy(*filename, buffer+2, dataSize-8);
+        } else {
+            *mode = malloc(9*sizeof(char));
+            strncpy(*mode, buffer+dataSize-9, 9);
+            if(strcmp(*mode, NETASCII) == 0) {
+                // mode is correct
+                *filename = malloc((dataSize-11)*sizeof(char));
+                strncpy(*filename, buffer+2, dataSize-11);
+            } else {
+                return -1;
+            }
+        }
         return 0;
     } else {
+        // Not an Acceptable RRQ
         return -1;
     }
 }
