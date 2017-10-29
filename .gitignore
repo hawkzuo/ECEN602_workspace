@@ -16,3 +16,6 @@ include/
 
 # ignore .txt test files
 *.txt
+
+HW3/test
+

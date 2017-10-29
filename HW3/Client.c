@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include "TFTP.h"
 
-#define MAXBUFLEN 517
+#define MAXRECVBUFLEN 517
 
 
 #define SERVERPORT "4950" // the port users will be connecting to
@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     int rv;
     ssize_t numbytes;
 
-    char recvBuf[MAXBUFLEN];
+    char recvBuf[MAXRECVBUFLEN];
     ssize_t recvcount;
 
     struct sockaddr_storage their_addr;
@@ -88,13 +88,13 @@ int main(int argc, char *argv[])
     uint16_t seqNum = 0;
 
     while(1) {
-        if ((recvcount = recvfrom(sockfd, recvBuf, MAXBUFLEN-1 , 0,
+        if ((recvcount = recvfrom(sockfd, recvBuf, MAXRECVBUFLEN-1 , 0,
                                  (struct sockaddr *)&their_addr, &addr_len)) == -1) {
             perror("recvfrom");
             exit(1);
         }
 
-        if(recvcount >= MAXBUFLEN) {
+        if(recvcount >= MAXRECVBUFLEN) {
             continue;
         }
 
@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
                            (struct sockaddr *)&their_addr, addr_len);
                 }
 
-                if(recvcount-4 != MAXSENDBUFLEN) {
+                if(recvcount-4 != MAXDATALEN) {
                     // Last frame
                     break;
                 } else {
