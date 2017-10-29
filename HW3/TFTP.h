@@ -18,6 +18,7 @@ static char* NETASCII = "netascii";
 
 int generateRRQ(char** rrqMsg, const char* filename, const char* mode);
 int parseRRQ(char** filename, char** mode, char buffer[], ssize_t dataSize);
+int parseWRQ(char** filename, char** mode, char buffer[], ssize_t dataSize);
 int generateDATA(char dataMsg[], const char fileBuffer[], uint16_t seqNum, ssize_t file_read_count);
 int parseDATA(char** message, uint16_t* seqNum, const char buffer[], ssize_t dataSize);
 int generateACK(char ackMsg[], uint16_t seqNum);

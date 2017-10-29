@@ -169,6 +169,74 @@ void sendFileViaTFTP(const char *filename,
 	nextchar = -1;
 }
 
+void readFileViaTFTP(const char *filename, int newfd, struct sockaddr_storage their_addr, socklen_t addr_len)
+{
+    int read_fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    printf("read_fd: %d\n", read_fd);
+    char recvBuf[MAXSENDBUFLEN+4+1];
+    uint16_t desiredSeq = 1;
+    uint16_t seqNum = 0;
+    ssize_t recvcount;
+
+    // send the first ACK:
+    char ackFirst[4];
+    if(generateACK(ackFirst, seqNum) == 0) {
+        sendto(newfd, ackFirst, (size_t) 4, 0,
+               (struct sockaddr *)&their_addr, addr_len);
+    }
+
+    while(1) {
+        if ((recvcount = recvfrom(newfd, recvBuf, MAXSENDBUFLEN+4+1, 0,
+                                  (struct sockaddr *)&their_addr, &addr_len)) == -1) {
+            perror("recvfrom");
+            return;
+        }
+
+        printf("RecvCount: %zi\n", recvcount);
+//        printf("Byte View:\n");
+//		for(int i=0;i<recvcount;i++) {
+//			printf("%s\n", byte_to_binary(recvBuf[i]));
+//		}
+
+        if(recvcount > MAXSENDBUFLEN+4) {
+            printf("recvcount: MAXSENDBUFLEN\n");
+            continue;
+        }
+
+        char* data_msg;
+        char ackMsg[4];
+
+        if(parseDATA(&data_msg, &seqNum, recvBuf, recvcount) == 0) {
+            if(desiredSeq == seqNum) {
+                // Success Print on screen & send ACK back
+                write(read_fd, data_msg, recvcount-4);
+                if(generateACK(ackMsg, seqNum) == 0) {
+                    // Send to Server
+                    sendto(newfd, ackMsg, (size_t) 4, 0,
+                           (struct sockaddr *)&their_addr, addr_len);
+                }
+
+                if(recvcount-4 != MAXSENDBUFLEN) {
+                    // Last frame
+                    break;
+                } else {
+                    if(desiredSeq == 65535) {
+                        desiredSeq = 0;
+                    } else {
+                        desiredSeq ++;
+                    }
+                }
+
+            }
+        }
+        memset(&recvBuf, 0, sizeof recvBuf);
+
+    }
+
+    close(read_fd);
+}
+
+
 
 int main(void)
 {
@@ -235,11 +303,18 @@ int main(void)
 
 		char* filename;
 		char* mode;
+        int isRRQ;
+
 		if(parseRRQ(&filename, &mode, buf, numbytes) == 0) {
 			printf("Filename: %s\n", filename);
 			printf("Mode: %s\n", mode);
-		} else {
-			printf("Unacceptable RRQ packet.\n");
+            isRRQ = 1;
+		} else if(parseWRQ(&filename, &mode, buf, numbytes) == 0) {
+            printf("Filename: %s\n", filename);
+            printf("Mode: %s\n", mode);
+            isRRQ = 0;
+        } else {
+			printf("Unacceptable RRQ/WRQ packet.\n");
 			continue;
 		}
 
@@ -262,14 +337,20 @@ int main(void)
 			bind(newfd, (struct sockaddr *)&my_addr, sizeof my_addr);
 
 			// Two Modes
-			if( strcmp(mode, OCTET) == 0 || strcmp(mode, NETASCII) == 0 ) {
-				// Two Supported Modes: OCTET & NETASCII Mode
-				sendFileViaTFTP(filename, newfd, their_addr, addr_len, mode);
-			} else {
-				// Should send an ERROR packet
-			}
+            if(isRRQ == 1) {
+                if( strcmp(mode, OCTET) == 0 || strcmp(mode, NETASCII) == 0 ) {
+                    // Two Supported Modes: OCTET & NETASCII Mode
+                    sendFileViaTFTP(filename, newfd, their_addr, addr_len, mode);
+                } else {
+                    // Should send an ERROR packet
+                }
+                printf("File sent. Will close connection.\n");
+            } else {
 
-			printf("File sent. Will close connection.\n");
+                readFileViaTFTP(filename, newfd, their_addr, addr_len);
+                printf("File received. Will close connection.\n");
+            }
+
 			close(newfd);
 			exit(0);
 		}
@@ -281,3 +362,5 @@ int main(void)
 	close(sockfd);
 	return 0;
 }
+
+
