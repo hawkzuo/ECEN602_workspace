@@ -11,7 +11,8 @@
 #define DATA 3
 #define ACK 4
 
-#define MAXSENDBUFLEN 512
+#define MAXRECVBUFLEN 517
+#define MAXDATALEN 512
 
 static char* OCTET = "octet";
 static char* NETASCII = "netascii";
@@ -23,8 +24,6 @@ int generateDATA(char dataMsg[], const char fileBuffer[], uint16_t seqNum, ssize
 int parseDATA(char** message, uint16_t* seqNum, const char buffer[], ssize_t dataSize);
 int generateACK(char ackMsg[], uint16_t seqNum);
 int parseACK(uint16_t* seqNum, const char buffer[], ssize_t dataSize);
-
-
 
 const char *byte_to_binary(int x);
 
