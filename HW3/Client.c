@@ -27,10 +27,20 @@ int main(int argc, char *argv[])
     struct sockaddr_storage their_addr;
     socklen_t addr_len = sizeof their_addr;
 
-    if (argc != 3) {
+    if (argc != 4) {
         fprintf(stderr,"usage: talker hostname message\n");
         exit(1);
     }
+    char* mode;
+    if(strcmp(argv[3], OCTET) == 0) {
+        mode = OCTET;
+    } else if (strcmp(argv[3], "netascii") == 0) {
+        mode = NETASCII;
+    } else {
+        perror("client:mode");
+        return 4;
+    }
+
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
@@ -57,7 +67,8 @@ int main(int argc, char *argv[])
     }
 
     char* rrqMsg;
-    int rrqSize = generateRRQ(&rrqMsg, argv[2], OCTET);
+
+    int rrqSize = generateRRQ(&rrqMsg, argv[2], mode);
 
 //    printf("Byte View:\n");
 //    for(int i=0;i<rrqSize;i++) {

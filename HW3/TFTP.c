@@ -6,6 +6,20 @@
 #include <stdint.h>
 #include "TFTP.h"
 
+int generateErrorMessage(char buffer[], char* errorMessage, int errorCode) {
+   buffer[0]=(char)0;
+   buffer[1]=(char)5;
+   buffer[2]=(char)errorCode >> 8;
+   buffer[3] = (char)errorCode & (uint8_t)0xFF;
+   for(int i=0; i<strlen(errorMessage); i++) {
+        buffer[4+i] = errorMessage[i];
+   }
+   printf("error message: %s\n", errorMessage);
+   printf("buffer %s\n", buffer);
+   return 0;
+
+}
+
 int generateRRQ(char** rrqMsg, const char* filename, const char* mode)
 {
     if(strcmp(mode, OCTET) == 0 || strcmp(mode, NETASCII) == 0) {
@@ -18,11 +32,11 @@ int generateRRQ(char** rrqMsg, const char* filename, const char* mode)
         for(int i=0;i<=strlen(filename);i++) {
             *ptr++ = *(filename+i);
         }
-        *ptr++ = (char)0;
+//        *ptr++ = (char)0;
         for(int i=0;i<strlen(mode);i++) {
             *ptr++ = *(mode+i);
         }
-        *ptr = (char)0;
+//        *ptr = (char)0;
 
         return (int) totalLen;
 
@@ -35,12 +49,26 @@ int generateRRQ(char** rrqMsg, const char* filename, const char* mode)
 int parseRRQ(char** filename, char** mode, char buffer[], ssize_t dataSize)
 {
     if(dataSize > 10 && buffer[0] == (char)0 && buffer[1] == (char)RRQ) {
-        *filename = malloc((dataSize-10)*sizeof(char));
         *mode = malloc(6*sizeof(char));
-        strncpy(*filename, buffer+2, dataSize-10);
-        strncpy(*mode, buffer+dataSize-7, 6);
+        strncpy(*mode, buffer+dataSize-6, 6);
+        if(strcmp(*mode, OCTET) == 0) {
+            // mode is correct
+            *filename = malloc((dataSize-8)*sizeof(char));
+            strncpy(*filename, buffer+2, dataSize-8);
+        } else {
+            *mode = malloc(9*sizeof(char));
+            strncpy(*mode, buffer+dataSize-9, 9);
+            if(strcmp(*mode, NETASCII) == 0) {
+                // mode is correct
+                *filename = malloc((dataSize-11)*sizeof(char));
+                strncpy(*filename, buffer+2, dataSize-11);
+            } else {
+                return -1;
+            }
+        }
         return 0;
     } else {
+        // Not an Acceptable RRQ
         return -1;
     }
 }
@@ -73,8 +101,8 @@ int generateACK(char ackMsg[], uint16_t seqNum)
 {
     ackMsg[0] = (uint8_t)0;
     ackMsg[1] = (uint8_t)ACK;
-    ackMsg[3] = (uint8_t)seqNum >> 8;
-    ackMsg[4] = (uint8_t)seqNum & (uint8_t)0xFF;
+    ackMsg[2] = (uint8_t)seqNum >> 8;
+    ackMsg[3] = (uint8_t)(seqNum & 0xFF);
     return 0;
 }
 

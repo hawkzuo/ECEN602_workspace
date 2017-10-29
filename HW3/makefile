@@ -1,4 +1,4 @@
-all: Server Client
+all: Server Client TFTP.o
 
 Server: Server.c TFTP.o
 	gcc -o Server Server.c TFTP.o -std=gnu99

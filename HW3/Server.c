@@ -18,6 +18,7 @@
 #define MAXBUFLEN 513
 
 
+
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -37,6 +38,141 @@ int readable_timeo(int fd, int sec) {
 	tv.tv_usec = 0;
 
 	return select(fd+1, &rset, NULL,NULL, &tv);
+}
+
+//Global nextchar
+char nextchar;
+
+int readViaASCII(FILE *fp, char *ptr, int maxnbytes)
+{
+	for(int count=0; count < maxnbytes; count++) {
+		if(nextchar >= 0) {
+			*ptr++ = nextchar;
+			nextchar = -1;
+			continue;
+		}
+
+		int c = getc(fp);
+		if(c == EOF) {
+			if(ferror(fp)) {
+				perror("read err on getc");
+			}
+			return count;
+		} else if (c == '\n') {
+			c = '\r';
+			nextchar = '\n';
+		} else if (c == '\r') {
+			nextchar = '\0';
+		} else {
+			nextchar = -1;
+		}
+		*ptr++ = (char) c;
+	}
+	return maxnbytes;
+}
+
+
+void sendFileViaTFTP(const char *filename,
+					 int newfd,
+					 struct sockaddr_storage their_addr,
+					 socklen_t addr_len,
+					 const char *mode)
+{
+	// Initialize file descriptors
+	int fd;
+	FILE* fp;
+	nextchar = -1;
+	if(strcmp(mode, OCTET) == 0) {
+		fd = open(filename, O_RDONLY);
+		fp = NULL;
+	} else if(strcmp(mode, NETASCII) == 0) {
+		fp = fopen(filename, "r");
+		fd = -1;
+	} else {
+		// This case should not happen
+                
+		return;
+	}
+
+	// Read the First Packet
+	char fileBuffer[MAXSENDBUFLEN+1];
+	uint16_t seqNum = 1;
+	ssize_t file_read_count;
+	if(strcmp(mode, OCTET) == 0) {
+		file_read_count	= read(fd, fileBuffer, MAXSENDBUFLEN);
+	} else {
+		file_read_count = readViaASCII(fp, fileBuffer, MAXSENDBUFLEN);
+	}
+
+	// Loop Over All Left
+	while(file_read_count >= 0 ) {
+
+		// Send A full DATA packet
+		char dataMsg[file_read_count+4];
+		if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
+			int retries = 0;
+			sendto(newfd, dataMsg, sizeof dataMsg, 0,
+				   (struct sockaddr *)&their_addr, addr_len);
+			// Retry Logic
+			while(retries <= 10 ) {
+				if(readable_timeo(newfd, 1) <= 0) {
+					// Timeout
+					if(retries >= 10) {
+						printf("Retry Times is maximum. Will close connection\n");
+                                                char* errorMessage = "Error during get file from the server"; 
+                                                int length = strlen(errorMessage) + sizeof(uint16_t)*2 + 1 ;
+                                                char buffer[length];                               
+                                                generateErrorMessage(buffer, errorMessage, 2);
+                                                sendto(newfd, buffer, length, 0, (struct sockaddr *)&their_addr, addr_len);
+						close(newfd);
+						exit(0);
+					}
+					retries ++;
+					printf("Retry Times: %d\n", retries);
+					sendto(newfd, dataMsg, sizeof dataMsg, 0,
+						   (struct sockaddr *)&their_addr, addr_len);
+				} else {
+					// We might receive an ACK
+					ssize_t received_count;
+					uint16_t received_seq_num;
+					char ackBuf[5];
+					if ((received_count = recvfrom(newfd, ackBuf, 4 , 0,
+												   (struct sockaddr *)&their_addr, &addr_len)) == -1) {
+						perror("recvfrom:ACK");
+						exit(1);
+					}
+					if(received_count == 4 && parseACK(&received_seq_num, ackBuf, 4) == 0) {
+						if(received_seq_num == seqNum) {
+							break;
+						}
+					}
+				}
+			}
+			// Wrap-Around
+			if(seqNum == 65535) {
+				// Wrap is needed
+				seqNum = 0;
+			} else {
+				seqNum ++;
+			}
+		}
+		memset(&fileBuffer, 0, sizeof fileBuffer);
+		if(file_read_count == MAXSENDBUFLEN) {
+			// Keep Sending
+			if(strcmp(mode, OCTET) == 0) {
+				file_read_count	= read(fd, fileBuffer, MAXSENDBUFLEN);
+			} else {
+				file_read_count = readViaASCII(fp, fileBuffer, MAXSENDBUFLEN);
+			}
+		} else {
+			// Last Frame
+			printf("Succeeded sending %d packets DATA.\n", seqNum-1);
+			break;
+		}
+
+	}
+	// Reset this global helper Character after sending each file
+	nextchar = -1;
 }
 
 
@@ -60,7 +196,7 @@ int main(void)
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
-// loop through all the results and bind to the first we can
+	// loop through all the results and bind to the first we can
 	for(p = servinfo; p != NULL; p = p->ai_next) {
 		if ((sockfd = socket(p->ai_family, p->ai_socktype,
 							 p->ai_protocol)) == -1) {
@@ -81,15 +217,12 @@ int main(void)
 	if(sockfd == -1) {
 		return 3;
 	}
-
-
-
-
-
-
 	freeaddrinfo(servinfo);
 	printf("server: waiting to recvfrom...\n");
 	addr_len = sizeof their_addr;
+
+
+	// Server starts here
 	while(1) {
 		if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0,
 								 (struct sockaddr *)&their_addr, &addr_len)) == -1) {
@@ -135,108 +268,20 @@ int main(void)
 			bind(newfd, (struct sockaddr *)&my_addr, sizeof my_addr);
 
 			// Two Modes
-			if(strcmp(mode, OCTET) == 0) {
-				// OCTET Mode:
-				int fd = open(filename, O_RDONLY);
-				char fileBuffer[MAXSENDBUFLEN+1];
-				uint16_t seqNum = 1;
-				ssize_t file_read_count = read(fd, fileBuffer, MAXSENDBUFLEN);
-				while(file_read_count >= 0 ) {
-					if(file_read_count == MAXSENDBUFLEN) {
-						// Send A full DATA packet
-						char dataMsg[file_read_count+4];
-						if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
-							// Create a Helper Named SendWithRetry
-							int retries = 0;
-							sendto(newfd, dataMsg, sizeof dataMsg, 0,
-								   (struct sockaddr *)&their_addr, addr_len);
-							// Retry Logic
-							while(retries <= 10 ) {
-								if(readable_timeo(newfd, 1) <= 0) {
-									// Timeout
-									if(retries >= 10) {
-										printf("Retry Times is maximum. Will close connection\n");
-										close(newfd);
-										exit(0);
-									}
-									retries ++;
-									printf("Retry Times: %d\n", retries);
-									sendto(newfd, dataMsg, sizeof dataMsg, 0,
-										   (struct sockaddr *)&their_addr, addr_len);
-								} else {
-									// We might receive an ACK
-									ssize_t received_count;
-									uint16_t received_seq_num;
-									char ackBuf[5];
-									if ((received_count = recvfrom(newfd, ackBuf, 4 , 0,
-																   (struct sockaddr *)&their_addr, &addr_len)) == -1 ||
-										received_count != 4) {
-										perror("recvfrom:ACK");
-										exit(1);
-									}
-									if(parseACK(&received_seq_num, ackBuf, 4) == 0) {
-										break;
-									}
-								}
-							}
-							// Wrap-Around
-							if(seqNum == 65535) {
-								// Wrap is needed
-								seqNum = 0;
-							} else {
-								seqNum ++;
-							}
-						}
-						file_read_count = read(fd, fileBuffer, MAXSENDBUFLEN);
-					} else {
-						char dataMsg[file_read_count+4];
-						if(generateDATA(dataMsg, fileBuffer, seqNum, file_read_count) == 0) {
-
-							int retries = 0;
-							sendto(newfd, dataMsg, sizeof dataMsg, 0,
-								   (struct sockaddr *)&their_addr, addr_len);
-							// Retry Logic
-							while(retries <= 10 ) {
-								if(readable_timeo(newfd, 1) <= 0) {
-									// Timeout
-									if(retries >= 10) {
-										printf("Retry Times is maximum. Will close connection\n");
-										close(newfd);
-										exit(0);
-									}
-									retries ++;
-									printf("Retry Times: %d\n", retries);
-									sendto(newfd, dataMsg, sizeof dataMsg, 0,
-										   (struct sockaddr *)&their_addr, addr_len);
-								} else {
-									// We might receive an ACK
-									ssize_t received_count;
-									uint16_t received_seq_num;
-									char ackBuf[5];
-									if ((received_count = recvfrom(newfd, ackBuf, 4 , 0,
-																   (struct sockaddr *)&their_addr, &addr_len)) == -1 ||
-										received_count != 4) {
-										perror("recvfrom:ACK");
-										exit(1);
-									}
-									if(parseACK(&received_seq_num, ackBuf, 4) == 0) {
-										break;
-									}
-								}
-							}
-						}
-						printf("Success at sending %d packets DATA.\n", seqNum);
-						break;
-					}
-				}
-			} else if(strcmp(mode, NETASCII) == 0) {
-
-			} else {
-
+			if( strcmp(mode, OCTET) == 0 || strcmp(mode, NETASCII) == 0 ) {
+				// Two Supported Modes: OCTET & NETASCII Mode                                                                
+				sendFileViaTFTP(filename, newfd, their_addr, addr_len, mode);
+			} else {    
+                                // Should send an ERROR packet
+                                char* errorMessage = "Invalid RRQ"; 
+                                int length = strlen(errorMessage) + sizeof(uint16_t)*2 + 1 ;
+                                char buffer[length];                               
+                                generateErrorMessage(buffer, errorMessage, 1);
+                                sendto(newfd, buffer, length, 0, (struct sockaddr *)&their_addr, addr_len);
+                               
 			}
 
-
-			printf("Will close connection \n");
+			printf("File sent. Will close connection.\n");
 			close(newfd);
 			exit(0);
 		}
@@ -248,7 +293,3 @@ int main(void)
 	close(sockfd);
 	return 0;
 }
-
-
-
-
