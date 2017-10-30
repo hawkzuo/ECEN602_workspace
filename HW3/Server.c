@@ -238,7 +238,7 @@ int64_t receiveFileViaTFTP(const char *filename,
             return -2;
         }
 
-        if(receiveCount > MAXDATALEN+4 || receiveCount < 5) {
+        if(receiveCount > MAXDATALEN+4 || receiveCount < 4) {
             printf("Discard Wrong Packet.\n");
             continue;
         }
