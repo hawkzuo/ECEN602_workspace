@@ -1,0 +1,18 @@
+This assignment implements the server for a simple TFTP service.
+
+Team role:
+Jianyu Zuo implements the server program. Jimin Wen implements the error message handling and testing.
+
+Usage:
+run make command to launch makefile generating executable file for the server. run make clean to remove all the 
+generated files from the directory. 
+To launch the client. The running command follows the pattern: tftp 0.0.0.0 4950
+To launch the server. The running command follows the pattern: ./Server echos 
+
+Implementation:
+On the server side:
+The program first implements input validation, get address information, bind the socket to the dedicated port number and listen to the 
+socket. After request from TFTP client is received and is validated, the server responds to the corresponding request.
+
+Errata:
+Server: input arguments error, RRQ error, WRQ error.
