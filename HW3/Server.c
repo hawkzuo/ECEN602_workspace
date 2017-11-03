@@ -113,6 +113,9 @@ void sendFileViaTFTP(const char *filename,
         return;
     }
 
+    uint64_t totalPackets = 0;
+    int firstRound = 1;
+
     // Read the First Packet
     char fileBuffer[MAXDATALEN+1];
     uint16_t seqNum = 1;
@@ -177,6 +180,12 @@ void sendFileViaTFTP(const char *filename,
             if(seqNum == 65535) {
                 // Wrap is needed
                 seqNum = 0;
+                if(firstRound == 1) {
+                    totalPackets += 65535;
+                    firstRound = 0;
+                } else {
+                    totalPackets += 65536;
+                }
             } else {
                 seqNum ++;
             }
@@ -191,11 +200,13 @@ void sendFileViaTFTP(const char *filename,
             }
         } else {
             // Last Frame
-            printf("Succeeded sending %d packets DATA.\n", seqNum-1);
+            totalPackets +=seqNum - 1;
+            printf("Succeeded sending %llu packets DATA.\n", totalPackets);
             break;
         }
 
     }
+    printf("File sent.\n");
     // Reset this global helper Character after sending each file
     nextchar = -1;
 }
@@ -283,6 +294,18 @@ int64_t receiveFileViaTFTP(const char *filename,
 
 }
 
+char* concat(const char *s1, const char *s2)
+{
+    char *result = malloc(strlen(s1)+strlen(s2)+1);//+1 for the null-terminator
+    //in real code you would check for errors in malloc here
+    strcpy(result, s1);
+    strcat(result, s2);
+    return result;
+}
+
+
+
+
 
 int main(void)
 {
@@ -330,6 +353,15 @@ int main(void)
 	printf("server: started.\nlistening on port: %s\nwaiting for connections...\n\n", MYPORT);
     addr_len = sizeof their_addr;
 
+    // Get the pwd
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) != NULL)
+        fprintf(stdout, "Current working dir: %s\n", cwd);
+    else
+        perror("getcwd() error");
+
+
+
     // Server starts here
     while(1) {
         if ((numbytes = recvfrom(sockfd, buf, MAXRECVBUFLEN-1 , 0,
@@ -351,15 +383,26 @@ int main(void)
         char* mode;
         int isRRQ;
 
+        char* full_filename;
+
+
         if(parseRRQ(&filename, &mode, buf, numbytes) == 0) {
             printf("Filename: %s\n", filename);
             printf("Mode: %s\n", mode);
             printf("Type: RRQ\n");
+
+            full_filename = concat(concat(cwd, "/"), filename);
+            printf("Full Filename: %s\n", full_filename);
+
             isRRQ = 1;
         } else if(parseWRQ(&filename, &mode, buf, numbytes) == 0) {
             printf("Filename: %s\n", filename);
             printf("Mode: %s\n", mode);
             printf("Type: WRQ\n");
+
+            full_filename = concat(concat(cwd, "/"), filename);
+            printf("Full Filename: %s\n", full_filename);
+
             isRRQ = 0;
         } else {
             printf("Unacceptable RRQ/WRQ packet.\n");
@@ -390,7 +433,7 @@ int main(void)
             if(isRRQ == 1) {
                 if( strcmp(mode, OCTET) == 0 || strcmp(mode, NETASCII) == 0 ) {
                     // Two Supported Modes: OCTET & NETASCII Mode
-                    sendFileViaTFTP(filename, newfd, their_addr, addr_len, mode);
+                    sendFileViaTFTP(full_filename, newfd, their_addr, addr_len, mode);
                 } else {
                     // Should send an ERROR packet "Unsupported mode"
                     char* errorMessage = "Unsupported mode"; 
@@ -401,10 +444,9 @@ int main(void)
                     memset(&errorMessage, 0, sizeof errorMessage);
                     memset(&buffer, 0, sizeof buffer);
                 }
-                printf("File sent.\n");
             } else {
 
-                int64_t fileSize = receiveFileViaTFTP(filename, newfd, their_addr, addr_len);
+                int64_t fileSize = receiveFileViaTFTP(full_filename, newfd, their_addr, addr_len);
                 if (fileSize == -1) {
                     // Send "No Such File to Client"
                     char* errorMessage = "No Such File to Client";                   
