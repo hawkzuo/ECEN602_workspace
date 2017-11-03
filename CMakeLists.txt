@@ -8,10 +8,10 @@ add_library( Lib ${LIB_SOURCES} ${LIB_HEADERS} )
 
 set(server_source
         HW3/Server.c)
-set(client_source
-        HW3/Client.c)
+set(parser_source
+        HW3/Parser.c)
 
-add_executable(Client ${client_source})
-target_link_libraries( Client Lib )
+add_executable(Parser ${parser_source})
+target_link_libraries( Parser Lib )
 add_executable(Server ${server_source})
 target_link_libraries( Server Lib )
