@@ -2,16 +2,16 @@ cmake_minimum_required(VERSION 3.8)
 project(ECEN602_workspace)
 set(CMAKE_CXX_STANDARD 11)
 
-file( GLOB LIB_SOURCES HW3/TFTP.c  )
-file( GLOB LIB_HEADERS HW3/TFTP.h )
+file( GLOB LIB_SOURCES HW4/readFast.c HW4/HTTP.c  )
+file( GLOB LIB_HEADERS HW4/readFast.h HW4/HTTP.h )
 add_library( Lib ${LIB_SOURCES} ${LIB_HEADERS} )
 
-set(server_source
-        HW3/Server.c)
-set(parser_source
-        HW3/Parser.c)
+set(proxy_source
+        HW4/Proxy.c)
+set(client_source
+        HW4/Client.c)
 
-add_executable(Parser ${parser_source})
-target_link_libraries( Parser Lib )
-add_executable(Server ${server_source})
-target_link_libraries( Server Lib )
+add_executable(client ${client_source})
+target_link_libraries( client Lib )
+add_executable(proxy ${proxy_source})
+target_link_libraries( proxy Lib )
