@@ -27,31 +27,31 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-/* Write chars to the socket */
-ssize_t writen(int fd, void *vptr, size_t n) {
-    size_t num_char_left;
-    ssize_t num_char_written;
-    char *ptr;
-
-    ptr = vptr;
-//    printf("converted version of msg: %s\n", ptr);
-    num_char_left = n;
-    while (num_char_left > 0) {
-        // write is system call
-        if( (num_char_written = write(fd, ptr, num_char_left)) <= 0) {
-            // If error is EINTR, we try looping again
-            if(num_char_written <0 && errno == EINTR) {
-                num_char_written = 0;
-            } else {
-                // Other error types, will quit
-                return -1;
-            }
-        }
-        num_char_left -= num_char_written;
-        ptr += num_char_written;
-    }
-    return n;
-}
+///* Write chars to the socket */
+//ssize_t writen(int fd, void *vptr, size_t n) {
+//    size_t num_char_left;
+//    ssize_t num_char_written;
+//    char *ptr;
+//
+//    ptr = vptr;
+////    printf("converted version of msg: %s\n", ptr);
+//    num_char_left = n;
+//    while (num_char_left > 0) {
+//        // write is system call
+//        if( (num_char_written = write(fd, ptr, num_char_left)) <= 0) {
+//            // If error is EINTR, we try looping again
+//            if(num_char_written <0 && errno == EINTR) {
+//                num_char_written = 0;
+//            } else {
+//                // Other error types, will quit
+//                return -1;
+//            }
+//        }
+//        num_char_left -= num_char_written;
+//        ptr += num_char_written;
+//    }
+//    return n;
+//}
 
 /* Binary View Helper */
 const char *byte_to_binary(int x)
@@ -72,6 +72,7 @@ const char *byte_to_binary(int x)
 int send_message(const char *message, int msg_length, int fd)
 {
     char buffer[msg_length+1];
+    buffer[msg_length] ='\0';
 
     for(int i=0;i<msg_length;i++) {
         buffer[i] = *(message+i);

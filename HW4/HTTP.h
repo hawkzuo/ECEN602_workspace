@@ -3,6 +3,14 @@
 //
 
 #include <stdint.h>
+#include <stdlib.h>
+#include <memory.h>
+#include <stdint.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+
 
 #ifndef ECEN602_WORKSPACE_SBCP_H
 #define ECEN602_WORKSPACE_SBCP_H
@@ -37,13 +45,20 @@ static int ATTRMESSAGEMAX=512;
 //static uint8_t IDLE=9;
 
 // Maximum supported User Number
-#define MAXUSERCOUNT 101
-
+#define MAXUSERCOUNT 20
+#define HTTPRECVBUFSIZE 256
 
 int buildHTTPRequest(char** message, int* message_count,char* rawInput);
 char* concat(const char *s1, const char *s2);
+int parseHTTPRequest(char buffer[], ssize_t message_len, char **host, char **resource);
+int receiveFromGET(char* host, char* resource, char* httpMessage);
+ssize_t writen(int fd, void *vptr, size_t n);
 
 
+struct CSPair {
+    int client_fd;
+    int server_fd;
+};
 
 
 
