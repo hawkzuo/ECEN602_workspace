@@ -62,6 +62,18 @@ int parseHTTPRequest(char buffer[], ssize_t message_len, char **host, char **res
 
 }
 
+
+/**
+ * Perform retrieving resources from given URI via sending GET request
+ * @param host 		                -Host Address, example: "www.example.com"
+ * @param resource  		        -Resource Address, example: "index.html"
+ * @param cache[MAXUSERCOUNT]	    -Data Structure for LRU cache
+ * @param valid_LRU_node_count		-Count of current valid LRU nodes
+ * @param LRU_counter               -Global Counter used for Priority Management
+ * @param staledCacheIndex          -Indicate if this request is an update for a staled cache
+ * @return	0 on success, -1 on getaddrinfo error, -2 on connect error,
+ *          -3 on send error, -4 on file read error,
+ */
 int receiveFromGET(char* host,
                    char* resource,
                    struct LRU_node cache[MAXUSERCOUNT],
@@ -69,25 +81,35 @@ int receiveFromGET(char* host,
                    int64_t* LRU_counter,
                    int staledCacheIndex)
 {
-    // Strcture declaration for initialization of connection.
+    // Initial some useful variables
     struct addrinfo hints, *serverinfo, *p;
-    int rv; // Short for Return Value
+    int rv;                     // Short for Return Value
     ssize_t received_count;
     int socket_fd = -1;
     char receive_buffer[HTTPRECVBUFSIZE];
 
+    // Generate GET request body
     char httpMessage[128];
     memset(&httpMessage, 0, sizeof(httpMessage));
     sprintf(httpMessage,"GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n", resource, host);
+    // Generate BONUS GET request body
+    char httpMessageWithHeader[256];
 
+    // Open cache file
+    int read_fd = open(concat_host_res(host, resource), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    if(read_fd == -1) {
+        perror("receiveFromGET: createCacheFile");
+        return -4;
+    }
 
+    /* Connection Establishment */
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
     if ((rv = getaddrinfo(host, HTTPPORT, &hints, &serverinfo)) != 0) {
         fprintf(stderr, "receiveFromGET-getaddrinfo: %s\n", gai_strerror(rv));
-        return 1;
+        return -1;
     }
 
     for(p = serverinfo; p != NULL; p = p->ai_next) {
@@ -108,35 +130,28 @@ int receiveFromGET(char* host,
         return -2;
     }
 
-    // Create file to store
-    int read_fd = open(concat_host_res(host, resource), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-    if(read_fd == -1) {
-        perror("receiveFromGET: createCacheFile");
-        return -1;
-    }
-
-    // Use strlen here
+    /* Send the GET request message to the remote Host  */
     ssize_t send_count = writen(socket_fd, httpMessage, strlen(httpMessage));
     if(send_count < 0) {
-        perror("eceiveFromGET: sendToHost");
-        return -1;
+        perror("receiveFromGET: sendToHost");
+        return -3;
     }
 
+    /* Read Data & Store Cache */
     fd_set master;                      // master file descriptor list
     fd_set read_fds;                    // temp file descriptor list for select()
-    FD_ZERO(&master); // clear the master and temp sets
-    FD_ZERO(&read_fds);
-    FD_SET(socket_fd, &master);
-    struct timeval tv;
+    int totalBytes = 0;                 // Used to identify header
+    int cacheRequired = 0;              // Flag on cache storing
+    struct LRU_node node;               // New LRU Node
+    struct timeval tv;                  // Timeout time_value
     tv.tv_sec = IDLETIME;
     tv.tv_usec = 0;
-    int totalBytes = 0;
-    int cacheRequired = 0;
-    // Build A Node
-    struct LRU_node node;
+    FD_ZERO(&master);                   // clear the master and temp sets
+    FD_ZERO(&read_fds);
+    FD_SET(socket_fd, &master);
 
     while(1) {
-        read_fds = master; // copy it
+        read_fds = master;              // copy it
 
         if (select(socket_fd+1, &read_fds, NULL, NULL, &tv) == -1) {
             perror("receiveFromGET: select");
@@ -151,8 +166,9 @@ int receiveFromGET(char* host,
             if(received_count <= 0){
                 fprintf(stdout, "%zi bytes received\n", received_count);
             }
-
+            // Save to the file first
             write(read_fd, receive_buffer, (size_t) (received_count));
+
             if (totalBytes == 0) {
                 // First Frame, parse the Header
                 const char* ptr = receive_buffer;
@@ -188,9 +204,11 @@ int receiveFromGET(char* host,
                 }
             }
 
+            // Clear buffer for the next loop
             memset(&receive_buffer, 0, sizeof receive_buffer);
             totalBytes += received_count;
             if(received_count == 0) {
+                // EOF detected, data receive process is finished
                 break;
             }
         } else {
@@ -199,17 +217,17 @@ int receiveFromGET(char* host,
         }
     }
 
+    // Check if this node is qualified to be stored
     if(node.modified_date == NULL && node.expires_date == NULL) {
         cacheRequired = 0;
     } else {
         cacheRequired = 1;
     }
 
-
+    // Check if this action is requested by staled cache refreshment
     if(staledCacheIndex != -1) {
-        // Change Staled Node
+        // New node should be stored, so replace old stale node
         if(cacheRequired == 1) {
-            // Replace the node
             // Step 1: create the node
             node.priority = *LRU_counter;
             node.filename = concat_host_res(host, resource);
@@ -217,9 +235,10 @@ int receiveFromGET(char* host,
             // Step 2: update node
             cache[staledCacheIndex] = node;
         } else {
-            // Delete the node
+            // New node is not needed, so delete old stale node
             cache[staledCacheIndex] = cache[(*valid_LRU_node_count-1)];
             memset(&cache[(*valid_LRU_node_count-1)], 0, sizeof(cache[(*valid_LRU_node_count-1)]));
+            // Reduce valid_LRU_node_count by 1
             *(valid_LRU_node_count) -= 1;
         }
     } else {
@@ -227,8 +246,7 @@ int receiveFromGET(char* host,
             // Imp LRU shifting
             // Find the lowest priority one and replace it. RT: O(n)
 
-            // Step1: Find the lowest priority node Or assign it to 'stale' node
-
+            // Step1: Find the lowest priority node
             int64_t leastPriorityIndex = 0;
             int64_t leastPriorityValue = cache[0].priority;
             for(int i=1; i<MAXCACHECOUNT; i++) {
@@ -237,14 +255,14 @@ int receiveFromGET(char* host,
                 }
             }
 
-            // Step2: Create a Node at offset=MAXCACHECOUNT
+            // Step2: Construct full node
             node.priority = *LRU_counter;
             node.filename = concat_host_res(host, resource);
             *(LRU_counter) += 1;
 
-            // Step3: Swap & cleanup Node at offset=MAXCACHECOUNT
+            // Step3: Swap & cleanup Node
             if (remove(cache[leastPriorityIndex].filename) == 0) {
-                printf("Removed old cache file %s, due to max cache count reached.\n", cache[leastPriorityIndex].filename);
+                fprintf(stdout, "Removed old cache file '%s'\n  Reason: MaxCacheCount, delete least recently used.\n", cache[leastPriorityIndex].filename);
             } else {
                 perror("receiveFromGET: removeFile");
             }
@@ -252,18 +270,18 @@ int receiveFromGET(char* host,
             cache[leastPriorityIndex] = node;
 
         } else if (cacheRequired == 1) {
+            // Not Full, simply add this node to cache Array
             node.priority = *LRU_counter;
             node.filename = concat_host_res(host, resource);
             *(LRU_counter) += 1;
             cache[*valid_LRU_node_count] = node;
             *(valid_LRU_node_count) += 1;
         } else {
-            // Do not store cache
+            // cache node does not require storing
         }
     }
-
-
     // closing
+    fprintf(stdout, "Successfully finished retrieving resource from host.\n");
     close(read_fd);
     close(socket_fd);
 

@@ -10,13 +10,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <unistd.h>
-//#include <errno.h>
-//#include <netdb.h>
-//#include <signal.h>
-//#include <time.h>
 
 #define BACKLOG 10 // how many pending connections queue will hold
 #define MAXDATASIZE 1000 // max number of characters in a string we can send/get at once, including the '\n' char
@@ -48,23 +41,11 @@ int main(int argc, char** argv)
     ssize_t received_count;
 
     int yes=1;
-    int i,j,rv;
+    int i,rv;
 
     struct addrinfo hints, *servinfo, *p;
 
-
-    // These data structures are used to store Connected users in the chat room.
-    char* usernames[MAXUSERCOUNT];
-    int current_user_count = 0;
-    int userstatus[MAXUSERCOUNT];
-    int fdtable[MAXUSERCOUNT];
-
     // HW4
-    // Used for storing read/write fd for the same client
-    // As long as receive from server_fd, send data to client_fd, then close these 2
-    struct CSPair csPairs[MAXUSERCOUNT];
-    // stores the fd value of each Client
-    int client_fd_table[MAXUSERCOUNT];
 
     // LRU data structure
     struct LRU_node cache[MAXUSERCOUNT];
@@ -144,6 +125,7 @@ int main(int argc, char** argv)
 
     // Basic Prompt:
     printf("Server started, Proxy is open.\n");
+    fprintf(stdout, "Maximum cache file count is: %d\n", MAXCACHECOUNT);
 
 
     memset(&buf, 0, sizeof buf);
@@ -168,7 +150,7 @@ int main(int argc, char** argv)
                 if (newfd > fdmax) { // keep track of the max
                     fdmax = newfd;
                 }
-                printf("selectserver: new connection from %s on "
+                printf("Proxy: new connection from %s on "
                                "socket %d\n",
                        inet_ntop(remoteaddr.ss_family,
                                  get_in_addr((struct sockaddr *) &remoteaddr),
@@ -186,14 +168,14 @@ int main(int argc, char** argv)
                 if(received_count <= 0) {
                     // got error or connection closed by client clean up resources
                     if(received_count < 0) {
-                        perror("server: recvFromClient");
+                        perror("Proxy: recvFromClient");
                     }
                 } else if(newfd == i) {
                     // Version 1: Send GET request & receive data
                     char* host;
                     char* resource;
                     if(parseHTTPRequest(buf, received_count, &host, &resource) != 0) {
-                        perror("server: parseHTTP");
+                        perror("Proxy: parseHTTP");
                     }
                     // Print Out Host & Resource
                     printf("Host:%s\n", host);
@@ -210,21 +192,23 @@ int main(int argc, char** argv)
                             time_t curtime;
                             time(&curtime);
 
-                            if( (cache[k].expires_date != NULL && mktime(cache[k].expires_date) - curtime > 0) ||
+                            if( ((cache[k].expires_date != NULL && mktime(cache[k].expires_date) - curtime > 0) ||
                                 (cache[k].receive_date != NULL && cache[k].modified_date != NULL &&
-                                 curtime - mktime(cache[k].receive_date) <= 86400 &&
-                                 curtime - mktime(cache[k].modified_date) <= 2678400)  ) {
+                                 curtime - mktime(cache[k].receive_date) <= ONEDAY &&
+                                 curtime - mktime(cache[k].modified_date) <= ONEMONTH))  ) {
                                 // cache is valid
                                 desiredNode = cache[k];
                                 cached = 1;
                                 // Refresh Priority
                                 desiredNode.priority = global_LRU_priority_value;
                                 global_LRU_priority_value += 1;
+                                fprintf(stdout, "Cache is valid for this request, will send cached data back.\n");
                             } else {
                                 // cache is 'stale', remove it
                                 staledCacheIndex = k;
+                                fprintf(stdout, "Cache is stored for this request, but is stale, will send GET request.\n");
                                 if (remove(cache[staledCacheIndex].filename) == 0) {
-                                    printf("Removed old cache file %s, due to stale.\n", cache[staledCacheIndex].filename);
+                                    fprintf(stdout, "Removed old cache file '%s'\n  Reason: stale.\n", cache[staledCacheIndex].filename);
                                 }
                             }
 
@@ -233,8 +217,8 @@ int main(int argc, char** argv)
                     }
                     // Not Cached locally, send GET request
                     if (cached == 0) {
-                        if(receiveFromGET(host, resource, cache, &valid_LRU_node_count, &global_LRU_priority_value, staledCacheIndex) != 0) {
-                            perror("server: receiveGET");
+                        if(receiveFromGET(host, resource, cache, &valid_LRU_node_count, &global_LRU_priority_value, staledCacheIndex) < 0) {
+                            perror("Proxy: receiveGET");
                         }
                         desiredNode = cache[valid_LRU_node_count-1];
                     }
@@ -245,12 +229,12 @@ int main(int argc, char** argv)
                     int cached_file_fd = open(desiredNode.filename, O_RDONLY);
                     ssize_t file_read_count	= read(cached_file_fd, fileBuffer, HTTPRECVBUFSIZE);
                     if(file_read_count < 0) {
-                        perror("server: readCachedFile");
+                        perror("Proxy: readCachedFile");
                     }
                     while(file_read_count >= 0 ) {
                         ssize_t send_count = writen(newfd, fileBuffer, file_read_count);
                         if(send_count < 0) {
-                            perror("server: writenToClient");
+                            perror("Proxy: writenToClient");
                         }
                         memset(&fileBuffer, 0, sizeof fileBuffer);
                         file_read_count	= read(cached_file_fd, fileBuffer, HTTPRECVBUFSIZE);
@@ -262,10 +246,10 @@ int main(int argc, char** argv)
                     close(cached_file_fd);
                 }
                 // Clean Up resources on Server
-                sleep(2);
+//                sleep(1);
                 close(i); // bye!
                 FD_CLR(i, &master); // remove from master set
-                printf("\nselectserver: closed connection on socket %d\n", i);
+                printf("Proxy: finished sending file and closed connection on socket %d\n\n", i);
                 newfd = 0;
                 memset(&buf, 0, sizeof buf);
             }

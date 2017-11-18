@@ -24,12 +24,11 @@
 #define HTTPRECVBUFSIZE 512
 #define IDLETIME 1
 #define MAXCACHECOUNT 1
+#define ONEDAY 86400
+#define ONEMONTH 2678400
+
 
 static char* HTTPPORT = "80";
-struct CSPair {
-    int client_fd;
-    int server_fd;
-};
 
 struct LRU_node {
     char* filename;
@@ -37,7 +36,6 @@ struct LRU_node {
     struct tm* expires_date;
     struct tm* modified_date;
     int64_t priority;
-    struct LRU_node* next;
 };
 
 int buildHTTPRequest(char** message, int* message_count,char* rawInput);
@@ -50,8 +48,4 @@ char* concat(const char *s1, const char *s2);
 const char *byte_to_binary(int x);
 
 
-
-
 #endif //ECEN602_WORKSPACE_HTTP_H
-
-
