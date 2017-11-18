@@ -19,16 +19,18 @@
 
 // Maximum supported User Number
 #define MAXUSERCOUNT 15
-#define HTTPRECVBUFSIZE 256
+#define HTTPRECVBUFSIZE 512
 #define IDLETIME 1
 
 static char* HTTPPORT = "80";
 
 int buildHTTPRequest(char** message, int* message_count,char* rawInput);
-char* concat(const char *s1, const char *s2);
 int parseHTTPRequest(char buffer[], ssize_t message_len, char **host, char **resource);
 int receiveFromGET(char* host, char* resource, char* httpMessage);
+
 ssize_t writen(int fd, void *vptr, size_t n);
+char* concat_host_res(const char *host, const char *res);
+char* concat(const char *s1, const char *s2);
 const char *byte_to_binary(int x);
 
 
@@ -36,6 +38,17 @@ struct CSPair {
     int client_fd;
     int server_fd;
 };
+
+struct LRU_node {
+    char* filename;
+    char* receive_date;
+    char* expires_date;
+    char* modified_date;
+};
+
+
+
+
 
 
 #endif //ECEN602_WORKSPACE_HTTP_H

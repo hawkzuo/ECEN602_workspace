@@ -15,6 +15,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <time.h>
 #include "HTTP.h"
 
 #define BACKLOG 10 // how many pending connections queue will hold
@@ -66,6 +67,9 @@ int main(int argc, char** argv)
     // stores the fd value of each Client
     int client_fd_table[MAXUSERCOUNT];
 
+    // LRU data structure
+    struct LRU_node cache[MAXUSERCOUNT];
+    int valid_LRU_node_count = 0;
 
     /* Main program starts here */
 
@@ -199,11 +203,31 @@ int main(int argc, char** argv)
 
                     sprintf(httpMessage,"GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n",resource,host);
 //
+
+                    char timeBuffer[80];
+                    time_t curtime;
+                    struct tm *info;
+                    time(&curtime);
+                    info = gmtime(&curtime );
+                    strftime(timeBuffer,80,"%c", info);
+                    printf("Current time = %s", timeBuffer);
+
+                    // Reverse Process
+                    struct tm tm;
+                    char tmBuf[80];
+
+                    memset(&tm, 0, sizeof(struct tm));
+                    strptime("Sat Nov 18 05:13:15 2017", "%c", &tm);
+                    strftime(tmBuf,80,"%c", &tm);
+                    printf("Current time = %s", tmBuf);
+
+                    double diff = difftime(mktime(info), mktime(&tm));
+                    printf("\nDiff Seconds = %f", diff);
+
                     if(receiveFromGET(host, resource, httpMessage) != 0) {
                         perror("server: receiveGET");
                     }
                     exit(16);
-                    // Always send the cached version back to the client
                     // Update Cache
 
 

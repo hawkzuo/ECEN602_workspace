@@ -76,31 +76,30 @@ int receiveFromGET(char* host, char* resource, char* httpMessage)
     hints.ai_socktype = SOCK_STREAM;
 
     if ((rv = getaddrinfo(host, HTTPPORT, &hints, &serverinfo)) != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        fprintf(stderr, "receiveFromGET-getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
 
     for(p = serverinfo; p != NULL; p = p->ai_next) {
         if ((socket_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
-            perror("client: socket");
+            perror("receiveFromGET: socket");
             continue;
         }
         if (connect(socket_fd, p->ai_addr, p->ai_addrlen) == -1) {
             close(socket_fd);
-            perror("client: connect");
+            perror("receiveFromGET: connect");
             continue;
         }
         break;
     }
 
     if (p == NULL || socket_fd == -1) {
-        fprintf(stderr, "client: failed to connect\n");
-        printf("Sorry... bye bye");
-        return 2;
+        fprintf(stderr, "receiveFromGET: failed to connect\n");
+        return -2;
     }
 
     // Create file to store
-    int read_fd = open(concat(host, resource), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    int read_fd = open(concat_host_res(host, resource), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
     if(read_fd == -1) {
         perror("receiveFromGET: openfile");
         return -1;
@@ -111,8 +110,6 @@ int receiveFromGET(char* host, char* resource, char* httpMessage)
     ssize_t send_count = writen(socket_fd, httpMessage, strlen(httpMessage));
     printf("Send Count: %zi", send_count);
 
-    int retry_times = 0;
-
     fd_set master;                      // master file descriptor list
     fd_set read_fds;                    // temp file descriptor list for select()
     FD_ZERO(&master); // clear the master and temp sets
@@ -120,6 +117,7 @@ int receiveFromGET(char* host, char* resource, char* httpMessage)
     FD_SET(socket_fd, &master);
     struct timeval tv;
     tv.tv_sec = IDLETIME;
+    int totalBytes = 0;
 
     while(1) {
         read_fds = master; // copy it
@@ -131,13 +129,21 @@ int receiveFromGET(char* host, char* resource, char* httpMessage)
         // Read data:
         // Notice that here must use this implementation
         // That's because server can send data less than 256 Bytes
+
+
         if(FD_ISSET(socket_fd, &read_fds)) {
             received_count = recv(socket_fd, receive_buffer, HTTPRECVBUFSIZE , 0);
             if(received_count <= 0){
                 fprintf(stdout, "%zi bytes received\n", received_count);
             }
+            if (totalBytes == 0) {
+                // First Frame, parse the Header
+//                parseHTTPHeader(receive_buffer, received_count, );
+            }
+
             write(read_fd, receive_buffer, (size_t) (received_count));
             memset(&receive_buffer, 0, sizeof receive_buffer);
+            totalBytes += received_count;
             if(received_count == 0) {
                 break;
             }
@@ -194,6 +200,16 @@ ssize_t writen(int fd, void *vptr, size_t n)
     return n;
 }
 
+char* concat_host_res(const char *host, const char *res)
+{
+    char *result = malloc(strlen(host)+strlen(res)+2);//+1 for the null-terminator
+    //in real code you would check for errors in malloc here
+    strcpy(result, host);
+    strcat(result, "_");
+    strcat(result, res);
+    return result;
+}
+
 char* concat(const char *s1, const char *s2)
 {
     char *result = malloc(strlen(s1)+strlen(s2)+1);//+1 for the null-terminator
@@ -216,5 +232,22 @@ const char *byte_to_binary(int x)
 
     return b;
 }
+
+
+// LRU Rule: Least Recently Used
+/*
+ * For rules of keeping/removing caches
+ * Encoming URI:
+ *   If Cached.hasKey(filename):
+ *      If has Expires && not yet expired => Send Back Directly
+ *      Elseif {
+ *          Date is within 24 hours && Last-Modified is within 1 month => Send Back Directly
+ *      }
+ *   Else:
+ *      Fetch the file immediately
+ *      Do not cache files missing both Expires & Last-Modified Header
+ *  Move Entry to 1st priority
+ */
+
 
 
