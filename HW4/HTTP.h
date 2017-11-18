@@ -21,6 +21,7 @@
 #define MAXUSERCOUNT 15
 #define HTTPRECVBUFSIZE 512
 #define IDLETIME 1
+#define MAXCACHECOUNT 1
 
 static char* HTTPPORT = "80";
 struct CSPair {

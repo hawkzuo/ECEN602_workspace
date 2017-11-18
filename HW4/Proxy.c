@@ -240,6 +240,7 @@ int main(int argc, char** argv)
                     close(cached_file_fd);
                 }
                 // Clean Up resources on Server
+                sleep(5);
                 close(i); // bye!
                 FD_CLR(i, &master); // remove from master set
                 printf("\nselectserver: closed connection on socket %d\n", i);

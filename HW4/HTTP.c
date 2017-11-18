@@ -142,7 +142,6 @@ int receiveFromGET(char* host,
         // Notice that here must use this implementation
         // That's because server can send data less than 256 Bytes
 
-
         if(FD_ISSET(socket_fd, &read_fds)) {
             received_count = recv(socket_fd, receive_buffer, HTTPRECVBUFSIZE , 0);
             if(received_count <= 0){
@@ -202,9 +201,32 @@ int receiveFromGET(char* host,
         cacheRequired = 1;
     }
 
-    if(*valid_LRU_node_count == 10 && cacheRequired == 1) {
+    if(*valid_LRU_node_count == MAXCACHECOUNT && cacheRequired == 1) {
         // Imp LRU shifting
         // Find the lowest priority one and replace it. RT: O(n)
+
+        // Step1: Find the lowest priority  node
+        int64_t leastPriorityIndex = 0;
+        int64_t leastPriorityValue = cache[0].priority;
+        for(int i=1; i<MAXCACHECOUNT; i++) {
+            if(cache[i].priority < leastPriorityValue) {
+                leastPriorityIndex = i;
+            }
+        }
+
+        // Step2: Create a Node at offset=MAXCACHECOUNT
+        node.priority = *LRU_counter;
+        node.filename = concat_host_res(host, resource);
+        *(LRU_counter) += 1;
+
+        // Step3: Swap & cleanup Node at offset=MAXCACHECOUNT
+        if (remove(cache[leastPriorityIndex].filename) == 0) {
+            printf("Removed old cache file %s\n", cache[leastPriorityIndex].filename);
+        } else {
+
+        }
+        cache[leastPriorityIndex] = node;
+
 
     } else if (cacheRequired == 1) {
         node.priority = *LRU_counter;

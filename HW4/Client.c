@@ -139,7 +139,11 @@ int main(int argc, char *argv[])
 
 //      2nd: Receive file from server.
 //  Client side 'select' is not needed
-    char* filename = "sample.html";
+    time_t curtime;
+    time(&curtime);
+    char filename[128];
+    memset(&filename, 0, sizeof(filename));
+    sprintf(filename,"%ld_sample.html",curtime);
 
     int read_fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
     if(read_fd == -1) {
