@@ -20,8 +20,6 @@
 #define BACKLOG 10 // how many pending connections queue will hold
 #define MAXDATASIZE 1000 // max number of characters in a string we can send/get at once, including the '\n' char
 
-
-
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -31,65 +29,6 @@ void *get_in_addr(struct sockaddr *sa)
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
-
-//// writen n chars to the socket
-//ssize_t writen(int fd, void *vptr, size_t n) {
-//    size_t nleft;
-//    ssize_t nwritten;
-//    char *ptr;
-//
-//    ptr = vptr;
-//    nleft = n;
-//    while (nleft > 0) {
-//        // write is system call
-//        if( (nwritten = write(fd, ptr, nleft)) <= 0) {
-//            // If error is EINTR, we try looping again
-//            if(nwritten <0 && errno == EINTR) {
-//                nwritten = 0;
-//            } else {
-//                // Other error types, will quit
-//                return -1;
-//            }
-//        }
-//        nleft -= nwritten;
-//        ptr += nwritten;
-//    }
-//    return n;
-//}
-
-const char *byte_to_binary(int x)
-{
-    static char b[9];
-    b[0] = '\0';
-
-    int z;
-    for (z = 128; z > 0; z >>= 1)
-    {
-        strcat(b, ((x & z) == z) ? "1" : "0");
-    }
-
-    return b;
-}
-
-/* Send Message to fd, all types of msg supported*/
-int send_message(struct SBCPMessage *message, int msg_length, int fd)
-{
-    char buffer[msg_length];
-    if(createRawData(buffer, message, msg_length) != 0) {
-        perror("Send Message: raw data");
-        return -1;
-    }
-
-    ssize_t send_count = writen(fd, buffer, sizeof(buffer));
-    if(send_count != sizeof(buffer)) {
-        perror("Send Message: writen");
-        return -1;
-    } else {
-//        printf("Successfully sent %zi bytes.\n", send_count);
-    }
-    return 0;
-}
-
 
 
 int main(int argc, char** argv)
@@ -107,7 +46,6 @@ int main(int argc, char** argv)
     char buf[MAXDATASIZE+1]; // buffer for client data
     char remoteIP[INET6_ADDRSTRLEN];
     ssize_t received_count;
-    int message_type = -1;  // Dummy init value
 
     int yes=1;
     int i,j,rv;
@@ -121,25 +59,12 @@ int main(int argc, char** argv)
     int userstatus[MAXUSERCOUNT];
     int fdtable[MAXUSERCOUNT];
 
-    // These are pre-defined NAK reasons
-    char *nak_full = "Room is Full. \n";
-    char *nak_duplicate = "Username already exists. \n";
-
-    // These are names of each message type.
-    char *message_types[10] = {"","","JOIN","FWD","SEND","NAK","OFFLINE","ACK","ONLINE","IDLE"};
-
-
-
     // HW4
     // Used for storing read/write fd for the same client
     // As long as receive from server_fd, send data to client_fd, then close these 2
     struct CSPair csPairs[MAXUSERCOUNT];
     // stores the fd value of each Client
     int client_fd_table[MAXUSERCOUNT];
-
-
-
-
 
 
     /* Main program starts here */
@@ -229,7 +154,6 @@ int main(int argc, char** argv)
 
         if (FD_ISSET(listener, &read_fds)) {
             // handle new connections, namely:
-            // Parse for host and resource
 
             addrlen = sizeof remoteaddr;
             newfd = accept(listener,
@@ -252,7 +176,7 @@ int main(int argc, char** argv)
         }
 
         // run through the existing connections looking for data to read
-        // Version 1: Try to recv all server results on one trigger event
+        // Version 1: Try to recv all server results on one trigger event   =>  Success
         for(i = 0; i<= fdmax; i++) {
             if (FD_ISSET(i, &read_fds) && i != listener) {
                 received_count = recv(i, buf, sizeof buf, 0);
@@ -270,7 +194,7 @@ int main(int argc, char** argv)
                     // Do something
                     printf("Host:%s\n", host);
                     printf("Resource:%s\n", resource);
-                    char httpMessage[100];
+                    char httpMessage[1000];
                     memset(&httpMessage, 0, sizeof(httpMessage));
 
                     sprintf(httpMessage,"GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n",resource,host);
@@ -278,199 +202,20 @@ int main(int argc, char** argv)
                     if(receiveFromGET(host, resource, httpMessage) != 0) {
                         perror("server: receiveGET");
                     }
+                    exit(16);
+                    // Always send the cached version back to the client
+                    // Update Cache
+
+
 
                     // can clean up too
-
+                    newfd = 0;
                 }
 
                 memset(&buf, 0, sizeof buf);
 
             }
         }
-
-
-
-
-
-//        for(i = 0; i <= fdmax; i++) {
-//            if (FD_ISSET(i, &read_fds)) { // we got one!!
-//                if (i == listener) {
-//                } else {
-//                    // handle error case
-//                    received_count = recv(i, buf, sizeof buf, 0);
-//                    if (received_count <= 0) {
-//                        // got error or connection closed by client
-//                        if (received_count == 0) {
-//                        }
-//
-//                    } else if(newfd == i) {
-//                        // Meaning newly JOIN message should be received
-//
-//                        // 1st: Check the number of bytes received is correct
-//                        if(received_count >= 4 && (((uint8_t)buf[2] * 256) + (uint8_t)buf[3] == received_count) ) {
-//                            message_type = buf[1] & 0x7f;
-//                        }
-//
-//                        printf("Number Bytes Recv: %zu. \tMessage Type: %s.\n", received_count, message_types[message_type]);
-//
-//                        if(message_type != JOIN) {
-//                            // The client does not follow rules, close connection
-//                            close(i); // bye!
-//                            FD_CLR(i, &master); // remove from master set
-//                            printf("selectserver: closed connection on socket %d\n", i);
-//
-//                        } else {
-//                            char * user;
-//                            if ( parseJOIN(buf, &user) != -1) {
-//                                if(current_user_count < max_user) {
-//
-//                                    // Check Username dup first
-//                                    int hasDuplicate = 0;
-//
-//                                    for(int ii=0; ii<current_user_count; ii++) {
-//                                        if(strcmp(usernames[ii], user) == 0) {
-//                                            hasDuplicate = 1;
-//                                            break;
-//                                        }
-//                                    }
-//
-//                                    if(!hasDuplicate) {
-//                                        // Accept & send ACK back
-//                                        usernames[current_user_count] = user;
-//                                        userstatus[current_user_count] = ONLINE;
-//                                        fdtable[current_user_count] = i;
-//                                        current_user_count ++;
-//
-//                                        // Send ACK back to this client
-//                                        if(current_user_count >= 1) {
-//                                            struct SBCPMessage *ack_msg = (struct SBCPMessage *) malloc(
-//                                                    sizeof(struct SBCPMessage));
-//                                            int ack_msg_len = generateACK(ack_msg, usernames);
-//                                            if ( send_message(ack_msg, ack_msg_len, i) == -1) {
-//                                                perror("send");
-//                                            }
-//                                            free(ack_msg);
-//                                        }
-//
-//                                        // Send ONLINE to any other client
-//                                        struct SBCPMessage *online_msg = (struct SBCPMessage *) malloc(
-//                                                sizeof(struct SBCPMessage));
-//                                        int online_msg_len = generateONLINE(online_msg, user);
-//
-//                                        for (j = 0; j <= fdmax; j++) {
-//                                            // send to everyone!
-//                                            if (FD_ISSET(j, &master)) {
-//                                                // except the listener and ourselves
-//                                                if (j != listener && j != i) {
-//                                                    if (send_message(online_msg, online_msg_len, j) == -1) {
-//                                                        perror("send");
-//                                                    }
-//                                                }
-//                                            }
-//                                        }
-//                                        free(online_msg);
-//
-//
-//                                    } else {
-//                                        // Reject & send NAK back
-//                                        struct SBCPMessage *nak_msg = (struct SBCPMessage *) malloc(
-//                                                sizeof(struct SBCPMessage));
-//                                        int nak_msg_len = generateNAK(nak_msg, nak_duplicate);
-//                                        if ( send_message(nak_msg, nak_msg_len, i) == -1) {
-//                                            perror("send");
-//                                        }
-//                                        free(nak_msg);
-//                                        close(i); // bye!
-//                                        FD_CLR(i, &master); // remove from master set
-//                                        printf("selectserver: closed connection on socket %d\n", i);
-//                                    }
-//
-//                                } else {
-//                                    // Send NAK back & close connection
-//                                    struct SBCPMessage *nak_msg = (struct SBCPMessage *) malloc(
-//                                            sizeof(struct SBCPMessage));
-//                                    int nak_msg_len = generateNAK(nak_msg, nak_full);
-//                                    if ( send_message(nak_msg, nak_msg_len, i) == -1) {
-//                                        perror("send");
-//                                    }
-//                                    free(nak_msg);
-//                                    close(i); // bye!
-//                                    FD_CLR(i, &master); // remove from master set
-//                                    printf("selectserver: closed connection on socket %d\n", i);
-//                                }
-//                            }
-//                        }
-//                        newfd = 0;
-//                    } else {
-//                        // we got some data from a client
-//                        // 1st: Check the number of bytes received is correct
-//                        if(received_count >= 4 && (((uint8_t)buf[2] * 256) + (uint8_t)buf[3] == received_count) ) {
-//                            message_type = buf[1] & 0x7f;
-//                        }
-//                        printf("Number Bytes Recv: %zu. \tMessage Type: %s.\n", received_count, message_types[message_type]);
-//
-////                        printf("Received:\n");
-////                        for(int ii=0; ii<received_count; ii++) {
-////                            printf("Binary: %s\n", byte_to_binary(buf[ii]));
-////                        }
-//
-//                        char * sender;
-//                        char * messages;
-//
-//                        // figure out which client send this message first
-//                        for(int ii=0; ii<current_user_count; ii++) {
-//                            if(fdtable[ii] == i) {
-//                                sender = usernames[ii];
-//                                break;
-//                            }
-//                        }
-//
-//                        switch(message_type) {
-//                            case SEND:
-//                                if(parseSEND(buf, &messages) != -1) {
-//                                    struct SBCPMessage *fwd_msg = (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-//                                    int fwd_msg_len = generateFWD(fwd_msg, sender, messages);
-//                                    for (j = 0; j <= fdmax; j++) {
-//                                        // send to everyone!
-//                                        if (FD_ISSET(j, &master)) {
-//                                            // except the listener and ourselves
-//                                            if (j != listener && j != i) {
-//                                                if (send_message(fwd_msg, fwd_msg_len, j) == -1) {
-//                                                    perror("send");
-//                                                }
-//                                            }
-//                                        }
-//                                    }
-//                                    free(fwd_msg);
-//                                }
-//                                break;
-//                            case IDLE: {
-//                                struct SBCPMessage *sidle_msg = (struct SBCPMessage*)malloc(sizeof(struct SBCPMessage));
-//                                int sidle_msg_len = generateSERVERIDLE(sidle_msg, sender);
-//                                for (j = 0; j <= fdmax; j++) {
-//                                    // send to everyone!
-//                                    if (FD_ISSET(j, &master)) {
-//                                        // except the listener and ourselves
-//                                        if (j != listener && j != i) {
-//                                            if (send_message(sidle_msg, sidle_msg_len, j) == -1) {
-//                                                perror("send");
-//                                            }
-//                                        }
-//                                    }
-//                                }
-//                                free(sidle_msg);
-//                            }
-//                                break;
-//                            default:break;
-//                        }
-//                    }
-//
-//
-//                    memset(&buf, 0, sizeof buf);
-//
-//                }
-//            }
-//        }
     }
 }
 

@@ -16,7 +16,6 @@
 #include "HTTP.h"
 
 #define MAXDATASIZE 1000 // max number of characters in a string we can send/get at once, including the '\n' char
-#define IDLETIME 10     // seconds for clients indicating the idle process
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -25,47 +24,6 @@ void *get_in_addr(struct sockaddr *sa)
         return &(((struct sockaddr_in*)sa)->sin_addr);
     }
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
-
-///* Write chars to the socket */
-//ssize_t writen(int fd, void *vptr, size_t n) {
-//    size_t num_char_left;
-//    ssize_t num_char_written;
-//    char *ptr;
-//
-//    ptr = vptr;
-////    printf("converted version of msg: %s\n", ptr);
-//    num_char_left = n;
-//    while (num_char_left > 0) {
-//        // write is system call
-//        if( (num_char_written = write(fd, ptr, num_char_left)) <= 0) {
-//            // If error is EINTR, we try looping again
-//            if(num_char_written <0 && errno == EINTR) {
-//                num_char_written = 0;
-//            } else {
-//                // Other error types, will quit
-//                return -1;
-//            }
-//        }
-//        num_char_left -= num_char_written;
-//        ptr += num_char_written;
-//    }
-//    return n;
-//}
-
-/* Binary View Helper */
-const char *byte_to_binary(int x)
-{
-    static char b[9];
-    b[0] = '\0';
-
-    int z;
-    for (z = 128; z > 0; z >>= 1)
-    {
-        strcat(b, ((x & z) == z) ? "1" : "0");
-    }
-
-    return b;
 }
 
 /* Send HTTP Message to fd */
@@ -87,13 +45,6 @@ int send_message(const char *message, int msg_length, int fd)
         return 0;
     }
 }
-
-
-
-
-// Test for www.example.com first
-// Then test for www.tamu.edu/index.html
-
 
 int main(int argc, char *argv[])
 {
