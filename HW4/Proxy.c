@@ -35,7 +35,6 @@ void *get_in_addr(struct sockaddr *sa)
 int main(int argc, char** argv)
 {
 
-
     fd_set master;                      // master file descriptor list
     fd_set read_fds;                    // temp file descriptor list for select()
     int fdmax;                          // maximum file descriptor number
@@ -70,6 +69,7 @@ int main(int argc, char** argv)
     // LRU data structure
     struct LRU_node cache[MAXUSERCOUNT];
     int valid_LRU_node_count = 0;
+    int64_t global_LRU_priority_value = 0;
 
     /* Main program starts here */
 
@@ -157,12 +157,10 @@ int main(int argc, char** argv)
         }
 
         if (FD_ISSET(listener, &read_fds)) {
-            // handle new connections, namely:
+            // handle new connections
 
             addrlen = sizeof remoteaddr;
-            newfd = accept(listener,
-                           (struct sockaddr *) &remoteaddr,
-                           &addrlen);
+            newfd = accept(listener, (struct sockaddr *) &remoteaddr, &addrlen);
             if (newfd == -1) {
                 perror("accept");
             } else {
@@ -186,8 +184,10 @@ int main(int argc, char** argv)
                 received_count = recv(i, buf, sizeof buf, 0);
 
                 if(received_count <= 0) {
-                    // got error or connection closed by client
-
+                    // got error or connection closed by client clean up resources
+                    if(received_count < 0) {
+                        perror("server: recvFromClient");
+                    }
                 } else if(newfd == i) {
                     // Version 1: Send GET request & receive data
                     char* host;
@@ -195,49 +195,56 @@ int main(int argc, char** argv)
                     if(parseHTTPRequest(buf, received_count, &host, &resource) != 0) {
                         perror("server: parseHTTP");
                     }
-                    // Do something
+                    // Print Out Host & Resource
                     printf("Host:%s\n", host);
                     printf("Resource:%s\n", resource);
-                    char httpMessage[1000];
-                    memset(&httpMessage, 0, sizeof(httpMessage));
+                    // Check Cache 1st, then send GET
 
-                    sprintf(httpMessage,"GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n",resource,host);
-//
-
-                    char timeBuffer[80];
-                    time_t curtime;
-                    struct tm *info;
-                    time(&curtime);
-                    info = gmtime(&curtime );
-                    strftime(timeBuffer,80,"%c", info);
-                    printf("Current time = %s", timeBuffer);
-
-                    // Reverse Process
-                    struct tm tm;
-                    char tmBuf[80];
-
-                    memset(&tm, 0, sizeof(struct tm));
-                    strptime("Sat Nov 18 05:13:15 2017", "%c", &tm);
-                    strftime(tmBuf,80,"%c", &tm);
-                    printf("Current time = %s", tmBuf);
-
-                    double diff = difftime(mktime(info), mktime(&tm));
-                    printf("\nDiff Seconds = %f", diff);
-
-                    if(receiveFromGET(host, resource, httpMessage) != 0) {
-                        perror("server: receiveGET");
+                    char* desiredCacheFilename = concat_host_res(host, resource);
+                    struct LRU_node desiredNode;
+                    int cached = 0;
+                    for(int k=0; k<valid_LRU_node_count; k++) {
+                        if(strcmp(desiredCacheFilename, cache[k].filename) == 0) {
+                            desiredNode = cache[k];
+                            cached = 1;
+                            break;
+                        }
                     }
-                    exit(16);
-                    // Update Cache
+                    if (cached == 0) {
+                        if(receiveFromGET(host, resource, cache, &valid_LRU_node_count, &global_LRU_priority_value) != 0) {
+                            perror("server: receiveGET");
+                        }
+                        desiredNode = cache[valid_LRU_node_count-1];
+                    }
 
+                    // open the file and send back
+                    char fileBuffer[HTTPRECVBUFSIZE];
 
-
-                    // can clean up too
-                    newfd = 0;
+                    int cached_file_fd = open(desiredNode.filename, O_RDONLY);
+                    ssize_t file_read_count	= read(cached_file_fd, fileBuffer, HTTPRECVBUFSIZE);
+                    if(file_read_count < 0) {
+                        perror("server: readCachedFile");
+                    }
+                    while(file_read_count >= 0 ) {
+                        ssize_t send_count = writen(newfd, fileBuffer, file_read_count);
+                        if(send_count < 0) {
+                            perror("server: writenToClient");
+                        }
+                        memset(&fileBuffer, 0, sizeof fileBuffer);
+                        file_read_count	= read(cached_file_fd, fileBuffer, HTTPRECVBUFSIZE);
+                        if(file_read_count == 0) {
+                            break;
+                        }
+                    }
+                    // Close the cached file
+                    close(cached_file_fd);
                 }
-
+                // Clean Up resources on Server
+                close(i); // bye!
+                FD_CLR(i, &master); // remove from master set
+                printf("\nselectserver: closed connection on socket %d\n", i);
+                newfd = 0;
                 memset(&buf, 0, sizeof buf);
-
             }
         }
     }

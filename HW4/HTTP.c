@@ -3,6 +3,7 @@
 //
 
 
+#include <time.h>
 #include "HTTP.h"
 
 
@@ -62,7 +63,11 @@ int parseHTTPRequest(char buffer[], ssize_t message_len, char **host, char **res
 
 }
 
-int receiveFromGET(char* host, char* resource, char* httpMessage)
+int receiveFromGET(char* host,
+                   char* resource,
+                   struct LRU_node cache[MAXUSERCOUNT],
+                   int* valid_LRU_node_count,
+                   int64_t* LRU_counter)
 {
     // Strcture declaration for initialization of connection.
     struct addrinfo hints, *serverinfo, *p;
@@ -70,6 +75,11 @@ int receiveFromGET(char* host, char* resource, char* httpMessage)
     ssize_t received_count;
     int socket_fd = -1;
     char receive_buffer[HTTPRECVBUFSIZE];
+
+    char httpMessage[128];
+    memset(&httpMessage, 0, sizeof(httpMessage));
+    sprintf(httpMessage,"GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n", resource, host);
+
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -105,7 +115,6 @@ int receiveFromGET(char* host, char* resource, char* httpMessage)
         return -1;
     }
 
-
     // Use strlen here
     ssize_t send_count = writen(socket_fd, httpMessage, strlen(httpMessage));
     printf("Send Count: %zi", send_count);
@@ -118,6 +127,9 @@ int receiveFromGET(char* host, char* resource, char* httpMessage)
     struct timeval tv;
     tv.tv_sec = IDLETIME;
     int totalBytes = 0;
+    int cacheRequired = 0;
+    // Build A Node
+    struct LRU_node node;
 
     while(1) {
         read_fds = master; // copy it
@@ -136,12 +148,43 @@ int receiveFromGET(char* host, char* resource, char* httpMessage)
             if(received_count <= 0){
                 fprintf(stdout, "%zi bytes received\n", received_count);
             }
-            if (totalBytes == 0) {
-                // First Frame, parse the Header
-//                parseHTTPHeader(receive_buffer, received_count, );
-            }
 
             write(read_fd, receive_buffer, (size_t) (received_count));
+            if (totalBytes == 0) {
+                // First Frame, parse the Header
+                const char* ptr = receive_buffer;
+                while (ptr[0]) {
+                    char buffer[100];
+                    int n;
+                    sscanf(ptr, " %99[^\r\n]%n", buffer, &n); // note space, to skip white space
+                    ptr += n; // advance to next \n or \r, or to end (nul), or to 100th char
+                    // ... process buffer
+                    if ( memcmp(buffer, "Date: ", 6) == 0) {
+                        // Parse date first
+                        size_t date_len = strlen(buffer) + 1 - 6;
+                        char* date = malloc((date_len)*sizeof(char));
+                        *(date+date_len-1) = '\0';
+                        strncpy(date, buffer+6, date_len-1);
+                        node.receive_date = malloc(sizeof(struct tm));
+                        strptime(date, "%a, %d %b %Y %X %Z", node.receive_date);
+                    } else if ( memcmp(buffer, "Expires: ", 9) == 0) {
+                        size_t date_len = strlen(buffer) + 1 - 9;
+                        char* date = malloc((date_len)*sizeof(char));
+                        *(date+date_len-1) = '\0';
+                        strncpy(date, buffer+9, date_len-1);
+                        node.expires_date = malloc(sizeof(struct tm));
+                        strptime(date, "%a, %d %b %Y %X %Z", node.expires_date);
+                    } else if ( memcmp(buffer, "Last-Modified: ", 15) == 0) {
+                        size_t date_len = strlen(buffer) + 1 - 15;
+                        char* date = malloc((date_len)*sizeof(char));
+                        *(date+date_len-1) = '\0';
+                        strncpy(date, buffer+15, date_len-1);
+                        node.modified_date = malloc(sizeof(struct tm));
+                        strptime(date, "%a, %d %b %Y %X %Z", node.modified_date);
+                    }
+                }
+            }
+
             memset(&receive_buffer, 0, sizeof receive_buffer);
             totalBytes += received_count;
             if(received_count == 0) {
@@ -153,19 +196,25 @@ int receiveFromGET(char* host, char* resource, char* httpMessage)
         }
     }
 
-//    do{
-//        received_count = recv(socket_fd, receive_buffer, HTTPRECVBUFSIZE , 0);
-//        if(received_count == HTTPRECVBUFSIZE) {
-//
-//        } else {
-//            retry_times ++;
-//        }
-//        if(received_count <= 0){
-//            fprintf(stdout, "%zi bytes received\n", received_count);
-//        }
-//        write(read_fd, receive_buffer, (size_t) (received_count));
-//        memset(&receive_buffer, 0, sizeof receive_buffer);
-//    }while(received_count == HTTPRECVBUFSIZE && retry_times <=3);
+    if(node.modified_date == NULL && node.expires_date == NULL) {
+        cacheRequired = 0;
+    } else {
+        cacheRequired = 1;
+    }
+
+    if(*valid_LRU_node_count == 10 && cacheRequired == 1) {
+        // Imp LRU shifting
+        // Find the lowest priority one and replace it. RT: O(n)
+
+    } else if (cacheRequired == 1) {
+        node.priority = *LRU_counter;
+        node.filename = concat_host_res(host, resource);
+        *(LRU_counter) += 1;
+        cache[*valid_LRU_node_count] = node;
+        *(valid_LRU_node_count) += 1;
+    } else {
+        // Do not store cache
+    }
 
     // closing
     close(read_fd);
@@ -249,5 +298,24 @@ const char *byte_to_binary(int x)
  *  Move Entry to 1st priority
  */
 
+//                    char timeBuffer[80];
+//                    time_t curtime;
+//                    struct tm *info;
+//                    time(&curtime);
+//                    info = gmtime(&curtime );
+//                    strftime(timeBuffer,80,"%c", info);
+//                    printf("Current time = %s", timeBuffer);
+//
+//                    // Reverse Process
+//                    struct tm tm;
+//                    char tmBuf[80];
+//
+//                    memset(&tm, 0, sizeof(struct tm));
+//                    strptime("Sat Nov 18 05:13:15 2017", "%c", &tm);
+//                    strftime(tmBuf,80,"%c", &tm);
+//                    printf("Current time = %s", tmBuf);
+//
+//                    double diff = difftime(mktime(info), mktime(&tm));
+//                    printf("\nDiff Seconds = %f", diff);
 
 

@@ -23,17 +23,6 @@
 #define IDLETIME 1
 
 static char* HTTPPORT = "80";
-
-int buildHTTPRequest(char** message, int* message_count,char* rawInput);
-int parseHTTPRequest(char buffer[], ssize_t message_len, char **host, char **resource);
-int receiveFromGET(char* host, char* resource, char* httpMessage);
-
-ssize_t writen(int fd, void *vptr, size_t n);
-char* concat_host_res(const char *host, const char *res);
-char* concat(const char *s1, const char *s2);
-const char *byte_to_binary(int x);
-
-
 struct CSPair {
     int client_fd;
     int server_fd;
@@ -41,12 +30,21 @@ struct CSPair {
 
 struct LRU_node {
     char* filename;
-    char* receive_date;
-    char* expires_date;
-    char* modified_date;
+    struct tm* receive_date;
+    struct tm* expires_date;
+    struct tm* modified_date;
+    int64_t priority;
+    struct LRU_node* next;
 };
 
+int buildHTTPRequest(char** message, int* message_count,char* rawInput);
+int parseHTTPRequest(char buffer[], ssize_t message_len, char **host, char **resource);
+int receiveFromGET(char* host, char* resource, struct LRU_node cache[MAXUSERCOUNT], int* valid_LRU_node_count, int64_t* LRU_counter);
 
+ssize_t writen(int fd, void *vptr, size_t n);
+char* concat_host_res(const char *host, const char *res);
+char* concat(const char *s1, const char *s2);
+const char *byte_to_binary(int x);
 
 
 

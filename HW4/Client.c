@@ -139,7 +139,13 @@ int main(int argc, char *argv[])
 
 //      2nd: Receive file from server.
 //  Client side 'select' is not needed
-    int read_fd = open(concat("client",argv[3]), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    char* filename = "sample.html";
+
+    int read_fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    if(read_fd == -1) {
+        perror("client: openfile");
+
+    }
     while(1) {
         received_count = recv(socket_fd, bufRecv, sizeof(bufRecv), 0);
         if(received_count <= 0) {
