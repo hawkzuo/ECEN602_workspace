@@ -4,19 +4,19 @@
 
 // Test for www.example.com first
 // Then test for www.tamu.edu/index.html
+#include "HTTP.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
+#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <signal.h>
-#include <time.h>
-#include "HTTP.h"
+
+//#include <stdio.h>
+//#include <stdlib.h>
+//#include <unistd.h>
+//#include <errno.h>
+//#include <netdb.h>
+//#include <signal.h>
+//#include <time.h>
 
 #define BACKLOG 10 // how many pending connections queue will hold
 #define MAXDATASIZE 1000 // max number of characters in a string we can send/get at once, including the '\n' char
@@ -203,15 +203,37 @@ int main(int argc, char** argv)
                     char* desiredCacheFilename = concat_host_res(host, resource);
                     struct LRU_node desiredNode;
                     int cached = 0;
+                    int staledCacheIndex = -1;
                     for(int k=0; k<valid_LRU_node_count; k++) {
                         if(strcmp(desiredCacheFilename, cache[k].filename) == 0) {
-                            desiredNode = cache[k];
-                            cached = 1;
+                            // Check for Time Conditions
+                            time_t curtime;
+                            time(&curtime);
+
+                            if( (cache[k].expires_date != NULL && mktime(cache[k].expires_date) - curtime > 0) ||
+                                (cache[k].receive_date != NULL && cache[k].modified_date != NULL &&
+                                 curtime - mktime(cache[k].receive_date) <= 86400 &&
+                                 curtime - mktime(cache[k].modified_date) <= 2678400)  ) {
+                                // cache is valid
+                                desiredNode = cache[k];
+                                cached = 1;
+                                // Refresh Priority
+                                desiredNode.priority = global_LRU_priority_value;
+                                global_LRU_priority_value += 1;
+                            } else {
+                                // cache is 'stale', remove it
+                                staledCacheIndex = k;
+                                if (remove(cache[staledCacheIndex].filename) == 0) {
+                                    printf("Removed old cache file %s, due to stale.\n", cache[staledCacheIndex].filename);
+                                }
+                            }
+
                             break;
                         }
                     }
+                    // Not Cached locally, send GET request
                     if (cached == 0) {
-                        if(receiveFromGET(host, resource, cache, &valid_LRU_node_count, &global_LRU_priority_value) != 0) {
+                        if(receiveFromGET(host, resource, cache, &valid_LRU_node_count, &global_LRU_priority_value, staledCacheIndex) != 0) {
                             perror("server: receiveGET");
                         }
                         desiredNode = cache[valid_LRU_node_count-1];
@@ -240,7 +262,7 @@ int main(int argc, char** argv)
                     close(cached_file_fd);
                 }
                 // Clean Up resources on Server
-                sleep(5);
+                sleep(2);
                 close(i); // bye!
                 FD_CLR(i, &master); // remove from master set
                 printf("\nselectserver: closed connection on socket %d\n", i);

@@ -3,7 +3,6 @@
 //
 
 
-#include <time.h>
 #include "HTTP.h"
 
 
@@ -67,7 +66,8 @@ int receiveFromGET(char* host,
                    char* resource,
                    struct LRU_node cache[MAXUSERCOUNT],
                    int* valid_LRU_node_count,
-                   int64_t* LRU_counter)
+                   int64_t* LRU_counter,
+                   int staledCacheIndex)
 {
     // Strcture declaration for initialization of connection.
     struct addrinfo hints, *serverinfo, *p;
@@ -111,13 +111,16 @@ int receiveFromGET(char* host,
     // Create file to store
     int read_fd = open(concat_host_res(host, resource), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
     if(read_fd == -1) {
-        perror("receiveFromGET: openfile");
+        perror("receiveFromGET: createCacheFile");
         return -1;
     }
 
     // Use strlen here
     ssize_t send_count = writen(socket_fd, httpMessage, strlen(httpMessage));
-    printf("Send Count: %zi", send_count);
+    if(send_count < 0) {
+        perror("eceiveFromGET: sendToHost");
+        return -1;
+    }
 
     fd_set master;                      // master file descriptor list
     fd_set read_fds;                    // temp file descriptor list for select()
@@ -126,6 +129,7 @@ int receiveFromGET(char* host,
     FD_SET(socket_fd, &master);
     struct timeval tv;
     tv.tv_sec = IDLETIME;
+    tv.tv_usec = 0;
     int totalBytes = 0;
     int cacheRequired = 0;
     // Build A Node
@@ -135,7 +139,7 @@ int receiveFromGET(char* host,
         read_fds = master; // copy it
 
         if (select(socket_fd+1, &read_fds, NULL, NULL, &tv) == -1) {
-            perror("select");
+            perror("receiveFromGET: select");
             exit(4);
         }
         // Read data:
@@ -201,42 +205,63 @@ int receiveFromGET(char* host,
         cacheRequired = 1;
     }
 
-    if(*valid_LRU_node_count == MAXCACHECOUNT && cacheRequired == 1) {
-        // Imp LRU shifting
-        // Find the lowest priority one and replace it. RT: O(n)
 
-        // Step1: Find the lowest priority  node
-        int64_t leastPriorityIndex = 0;
-        int64_t leastPriorityValue = cache[0].priority;
-        for(int i=1; i<MAXCACHECOUNT; i++) {
-            if(cache[i].priority < leastPriorityValue) {
-                leastPriorityIndex = i;
-            }
-        }
-
-        // Step2: Create a Node at offset=MAXCACHECOUNT
-        node.priority = *LRU_counter;
-        node.filename = concat_host_res(host, resource);
-        *(LRU_counter) += 1;
-
-        // Step3: Swap & cleanup Node at offset=MAXCACHECOUNT
-        if (remove(cache[leastPriorityIndex].filename) == 0) {
-            printf("Removed old cache file %s\n", cache[leastPriorityIndex].filename);
+    if(staledCacheIndex != -1) {
+        // Change Staled Node
+        if(cacheRequired == 1) {
+            // Replace the node
+            // Step 1: create the node
+            node.priority = *LRU_counter;
+            node.filename = concat_host_res(host, resource);
+            *(LRU_counter) += 1;
+            // Step 2: update node
+            cache[staledCacheIndex] = node;
         } else {
-
+            // Delete the node
+            cache[staledCacheIndex] = cache[(*valid_LRU_node_count-1)];
+            memset(&cache[(*valid_LRU_node_count-1)], 0, sizeof(cache[(*valid_LRU_node_count-1)]));
+            *(valid_LRU_node_count) -= 1;
         }
-        cache[leastPriorityIndex] = node;
-
-
-    } else if (cacheRequired == 1) {
-        node.priority = *LRU_counter;
-        node.filename = concat_host_res(host, resource);
-        *(LRU_counter) += 1;
-        cache[*valid_LRU_node_count] = node;
-        *(valid_LRU_node_count) += 1;
     } else {
-        // Do not store cache
+        if(*valid_LRU_node_count == MAXCACHECOUNT && cacheRequired == 1) {
+            // Imp LRU shifting
+            // Find the lowest priority one and replace it. RT: O(n)
+
+            // Step1: Find the lowest priority node Or assign it to 'stale' node
+
+            int64_t leastPriorityIndex = 0;
+            int64_t leastPriorityValue = cache[0].priority;
+            for(int i=1; i<MAXCACHECOUNT; i++) {
+                if(cache[i].priority < leastPriorityValue) {
+                    leastPriorityIndex = i;
+                }
+            }
+
+            // Step2: Create a Node at offset=MAXCACHECOUNT
+            node.priority = *LRU_counter;
+            node.filename = concat_host_res(host, resource);
+            *(LRU_counter) += 1;
+
+            // Step3: Swap & cleanup Node at offset=MAXCACHECOUNT
+            if (remove(cache[leastPriorityIndex].filename) == 0) {
+                printf("Removed old cache file %s, due to max cache count reached.\n", cache[leastPriorityIndex].filename);
+            } else {
+                perror("receiveFromGET: removeFile");
+            }
+
+            cache[leastPriorityIndex] = node;
+
+        } else if (cacheRequired == 1) {
+            node.priority = *LRU_counter;
+            node.filename = concat_host_res(host, resource);
+            *(LRU_counter) += 1;
+            cache[*valid_LRU_node_count] = node;
+            *(valid_LRU_node_count) += 1;
+        } else {
+            // Do not store cache
+        }
     }
+
 
     // closing
     close(read_fd);

@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <time.h>
+#include <string.h>
 
 
 #ifndef ECEN602_WORKSPACE_HTTP_H
@@ -40,7 +42,7 @@ struct LRU_node {
 
 int buildHTTPRequest(char** message, int* message_count,char* rawInput);
 int parseHTTPRequest(char buffer[], ssize_t message_len, char **host, char **resource);
-int receiveFromGET(char* host, char* resource, struct LRU_node cache[MAXUSERCOUNT], int* valid_LRU_node_count, int64_t* LRU_counter);
+int receiveFromGET(char* host, char* resource, struct LRU_node cache[MAXUSERCOUNT], int* valid_LRU_node_count, int64_t* LRU_counter, int staledCacheIndex);
 
 ssize_t writen(int fd, void *vptr, size_t n);
 char* concat_host_res(const char *host, const char *res);
