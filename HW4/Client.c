@@ -143,7 +143,7 @@ int main(int argc, char *argv[])
     time(&curtime);
     char filename[128];
     memset(&filename, 0, sizeof(filename));
-    sprintf(filename,"%ld_sample.html",curtime);
+    sprintf(filename,"%ld_%s",curtime, replaceSlash(argv[3]));
 
     int read_fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
     if(read_fd == -1) {

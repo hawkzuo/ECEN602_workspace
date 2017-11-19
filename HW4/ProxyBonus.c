@@ -4,12 +4,9 @@
 
 // Test for www.example.com first
 // Then test for www.tamu.edu/index.html
+// Then for http://www.deepskyfrontier.com/index.html
+
 #include "HTTP.h"
-
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-
 
 #define BACKLOG 10 // how many pending connections queue will hold
 #define MAXDATASIZE 1000 // max number of characters in a string we can send/get at once, including the '\n' char
@@ -125,7 +122,7 @@ int main(int argc, char** argv)
 
     // Basic Prompt:
     printf("Server started, Proxy is open.\n");
-    fprintf(stdout, "Maximum cache file count is: %d\n", MAXCACHECOUNT);
+    fprintf(stdout, "Maximum cache file count is: %d\n\n", MAXCACHECOUNT);
 
 
     memset(&buf, 0, sizeof buf);
@@ -150,12 +147,8 @@ int main(int argc, char** argv)
                 if (newfd > fdmax) { // keep track of the max
                     fdmax = newfd;
                 }
-                printf("Proxy: new connection from %s on "
-                               "socket %d\n",
-                       inet_ntop(remoteaddr.ss_family,
-                                 get_in_addr((struct sockaddr *) &remoteaddr),
-                                 remoteIP, INET6_ADDRSTRLEN),
-                       newfd);
+//                printf("Proxy: new connection from %s on socket %d\n",
+//                       inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr *) &remoteaddr), remoteIP, INET6_ADDRSTRLEN), newfd);
             }
         }
 
@@ -186,50 +179,83 @@ int main(int argc, char** argv)
                     struct LRU_node desiredNode;
                     int cached = 0;
                     int staledCacheIndex = -1;
+                    struct tm* query_time = NULL;
+
                     for(int k=0; k<valid_LRU_node_count; k++) {
                         if(strcmp(desiredCacheFilename, cache[k].filename) == 0) {
                             // Check for Time Conditions
+                            // BONUS does this in a different way
                             time_t curtime;
                             time(&curtime);
 
-                            if( ((cache[k].expires_date != NULL && mktime(cache[k].expires_date) - curtime > 0) ||
-                                (cache[k].receive_date != NULL && cache[k].modified_date != NULL &&
-                                 curtime - mktime(cache[k].receive_date) <= ONEDAY &&
-                                 curtime - mktime(cache[k].modified_date) <= ONEMONTH))  ) {
+                            // These lines used to mannually test 'stale'
+//                            curtime += ONEMONTH;
+
+                            if( cache[k].expires_date != NULL && mktime(cache[k].expires_date) - curtime > 0 ) {
                                 // cache is valid
                                 desiredNode = cache[k];
                                 cached = 1;
                                 // Refresh Priority
                                 desiredNode.priority = global_LRU_priority_value;
                                 global_LRU_priority_value += 1;
+                                cache[k] = desiredNode;
                                 fprintf(stdout, "Cache is valid for this request, will send cached data back.\n");
                             } else {
                                 // cache is 'stale', remove it
                                 staledCacheIndex = k;
                                 fprintf(stdout, "Cache is stored for this request, but is stale, will send GET request.\n");
-                                if (remove(cache[staledCacheIndex].filename) == 0) {
-                                    fprintf(stdout, "Removed old cache file '%s'\n  Reason: stale.\n", cache[staledCacheIndex].filename);
-                                }
-                            }
 
+                                // should not perform remove here
+//                                if (remove(cache[staledCacheIndex].filename) == 0) {
+//                                    fprintf(stdout, "Removed old cache file '%s'\n  Reason: stale.\n", cache[staledCacheIndex].filename);
+//                                }
+
+                                // Assign Expires / Date to query_time
+                                if(cache[k].expires_date != NULL) {
+                                    query_time = cache[k].expires_date;
+                                } else if(cache[k].receive_date != NULL) {
+                                    query_time = cache[k].receive_date;
+                                } else if(cache[k].modified_date != NULL) {
+                                    query_time = cache[k].modified_date;
+                                }
+
+                            }
                             break;
                         }
                     }
                     int receiveFromGETFlag = 0;
                     // Not Cached locally, send GET request
                     if (cached == 0) {
-                        receiveFromGETFlag = receiveFromGET(host, resource, cache, &valid_LRU_node_count, &global_LRU_priority_value, staledCacheIndex);
+                        if (query_time != NULL) {
+                            receiveFromGETFlag = receiveFromGETBONUS(host,
+                                                                     resource,
+                                                                     cache,
+                                                                     &valid_LRU_node_count,
+                                                                     &global_LRU_priority_value,
+                                                                     staledCacheIndex,
+                                                                     query_time);
+                        } else {
+                            receiveFromGETFlag = receiveFromGET(host,
+                                                                resource,
+                                                                cache,
+                                                                &valid_LRU_node_count,
+                                                                &global_LRU_priority_value,
+                                                                staledCacheIndex);
+                        }
+
                         if(receiveFromGETFlag < 0) {
                             perror("Proxy: receiveGET");
                         }
 //                        desiredNode = cache[valid_LRU_node_count-1];
                     }
 
+                    fprintf(stdout, "Start sending file to the client.\n");
+
                     // open the file and send back
                     char fileBuffer[HTTPRECVBUFSIZE];
 
                     // At this time, no matter read from cache or after sending GET request,
-                    // desiredCacheFilename should always be present at file system
+                    // desiredCacheFilename should always be present at file system, and with the correct content
                     int cached_file_fd = open(desiredCacheFilename, O_RDONLY);
                     ssize_t file_read_count	= read(cached_file_fd, fileBuffer, HTTPRECVBUFSIZE);
                     if(file_read_count < 0) {
@@ -253,19 +279,16 @@ int main(int argc, char** argv)
                     if(receiveFromGETFlag == 11) {
                         remove(desiredCacheFilename);
                     }
-
-
                 }
                 // Clean Up resources on Server
-//                sleep(1);
+                fprintf(stdout, "Finished sending file to the client.\nCurrent cache count is:\t%d\nWill close connection.\n\n", valid_LRU_node_count);
+                sleep(1);
                 close(i); // bye!
                 FD_CLR(i, &master); // remove from master set
-                printf("Proxy: finished sending file and closed connection on socket %d\n\n", i);
+//                printf("Proxy: finished sending file and closed connection on socket %d\n\n", i);
                 newfd = 0;
                 memset(&buf, 0, sizeof buf);
             }
         }
     }
 }
-
-

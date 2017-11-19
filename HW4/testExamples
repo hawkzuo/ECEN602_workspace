@@ -1,0 +1,25 @@
+Proxy:
+    ./proxy 0.0.0.0 7777 10 [the last number will be regarded as MAXCACHECOUNT
+
+Client:
+Web pages:
+    ./client 0.0.0.0 7777 http://www.example.com/index.html
+
+    ./client 0.0.0.0 7777 http://www.tamu.edu/index.html
+
+    ./client 0.0.0.0 7777 http://www.deepskyfrontier.com/index.html
+        [This page has no cache required headers]
+
+General Files:
+    ./client 0.0.0.0 7777 https://www.google.com/images/logo.png
+
+    ./client 0.0.0.0 7777 https://fast-crag-31827.herokuapp.com/Big.pkg
+        [This file is 10MB, but Heroku server is slow]
+    ./client 0.0.0.0 7777 http://students.cse.tamu.edu/jyhuang/csce614/casim_bench.tgz
+        [This file is huge, with 200MB+]
+
+Note:
+    The file received has a HTTP header, which results in cannot open directly.
+    If is desired, manually / a new program can remove such header data and the file will
+    be fully functional.
+

@@ -164,8 +164,9 @@ int receiveFromGET(char* host,
 
         if(FD_ISSET(socket_fd, &read_fds)) {
             received_count = recv(socket_fd, receive_buffer, HTTPRECVBUFSIZE , 0);
-            if(received_count <= 0){
-                fprintf(stdout, "%zi bytes received\n", received_count);
+            if(received_count < 0){
+                perror("receiveFromGET: recv");
+//                fprintf(stdout, "%zi bytes received\n", received_count);
             }
             // Save to the file first
             write(read_fd, receive_buffer, (size_t) (received_count));
@@ -280,6 +281,8 @@ int receiveFromGET(char* host,
         } else {
             // cache node does not require storing
             fprintf(stdout, "The file received from server is not well-formatted.\n");
+            fprintf(stdout, "Both Expires & Last-Modified Header is missing.\n");
+
             fprintf(stdout, "The Proxy will not store cache file for this request.\n");
             close(read_fd);
             close(socket_fd);
@@ -293,6 +296,217 @@ int receiveFromGET(char* host,
 
     return 0;
 }
+
+// staledCacheIndex cannot be -1 to enter this function
+int receiveFromGETBONUS(char* host,
+                   char* resource,
+                   struct LRU_node cache[MAXUSERCOUNT],
+                   int* valid_LRU_node_count,
+                   int64_t* LRU_counter,
+                   int staledCacheIndex,
+                   struct tm* query_time)
+{
+    // Initial some useful variables
+    struct addrinfo hints, *serverinfo, *p;
+    int rv;                     // Short for Return Value
+    ssize_t received_count;
+    int socket_fd = -1;
+    char receive_buffer[HTTPRECVBUFSIZE];
+
+    // Generate GET request body
+    char httpMessage[256];
+    memset(&httpMessage, 0, sizeof(httpMessage));
+
+    // Must convert to GMT format
+    char time_string[100];
+    time_t gmt_time = mktime(query_time);
+    strftime(time_string, 100, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&gmt_time));
+    fprintf(stdout, "If-Modified-Since Querying Time: %s\n", time_string);
+    sprintf(httpMessage,"GET /%s HTTP/1.1\r\nHost: %s\r\nIf-Modified-Since: %s\r\n\r\n", resource, host, time_string);
+
+
+
+    /* Connection Establishment */
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if ((rv = getaddrinfo(host, HTTPPORT, &hints, &serverinfo)) != 0) {
+        fprintf(stderr, "receiveFromGET-getaddrinfo: %s\n", gai_strerror(rv));
+        return -1;
+    }
+
+    for(p = serverinfo; p != NULL; p = p->ai_next) {
+        if ((socket_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+            perror("receiveFromGET: socket");
+            continue;
+        }
+        if (connect(socket_fd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(socket_fd);
+            perror("receiveFromGET: connect");
+            continue;
+        }
+        break;
+    }
+
+    if (p == NULL || socket_fd == -1) {
+        fprintf(stderr, "receiveFromGET: failed to connect\n");
+        return -2;
+    }
+
+    /* Send the GET request message to the remote Host  */
+    ssize_t send_count = writen(socket_fd, httpMessage, strlen(httpMessage));
+    if(send_count < 0) {
+        perror("receiveFromGET: sendToHost");
+        return -3;
+    }
+
+    /* Read Data & Store Cache */
+    fd_set master;                      // master file descriptor list
+    fd_set read_fds;                    // temp file descriptor list for select()
+    int totalBytes = 0;                 // Used to identify header
+    int cacheRequired = 0;              // Flag on cache storing
+    struct LRU_node node;               // New LRU Node
+    memset(&node, 0, sizeof(struct LRU_node));
+    struct timeval tv;                  // Timeout time_value
+    tv.tv_sec = IDLETIME;
+    tv.tv_usec = 0;
+    FD_ZERO(&master);                   // clear the master and temp sets
+    FD_ZERO(&read_fds);
+    FD_SET(socket_fd, &master);
+
+    int not_modified = 0;
+    // Open cache file
+    int read_fd = 0;
+
+    while(1) {
+        read_fds = master;              // copy it
+
+        if (select(socket_fd+1, &read_fds, NULL, NULL, &tv) == -1) {
+            perror("receiveFromGET: select");
+            exit(4);
+        }
+
+        if(FD_ISSET(socket_fd, &read_fds)) {
+            received_count = recv(socket_fd, receive_buffer, HTTPRECVBUFSIZE , 0);
+            if(received_count <= 0){
+                fprintf(stdout, "%zi bytes received\n", received_count);
+            }
+
+            if (totalBytes == 0) {
+                // First Frame, parse the Header to see if it's 304
+                if ( memcmp(receive_buffer, "HTTP/1.1 304", 12) == 0) {
+                    // File not changed, send cache back
+                    not_modified = 1;
+                    break;
+                } else {
+                    // Save to the file first
+                    if (read_fd == 0) {
+                        read_fd = open(concat_host_res(host, resource), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+                        if(read_fd == -1) {
+                            perror("receiveFromGET: createCacheFile");
+                            return -4;
+                        }
+                    }
+
+                    write(read_fd, receive_buffer, (size_t) (received_count));
+
+                    const char* ptr = receive_buffer;
+                    while (ptr[0]) {
+                        char buffer[100];
+                        int n;
+                        sscanf(ptr, " %99[^\r\n]%n", buffer, &n); // note space, to skip white space
+                        ptr += n; // advance to next \n or \r, or to end (nul), or to 100th char
+                        // ... process buffer
+                        if ( memcmp(buffer, "Date: ", 6) == 0) {
+                            // Parse date first
+                            size_t date_len = strlen(buffer) + 1 - 6;
+                            char* date = malloc((date_len)*sizeof(char));
+                            *(date+date_len-1) = '\0';
+                            strncpy(date, buffer+6, date_len-1);
+                            node.receive_date = malloc(sizeof(struct tm));
+                            strptime(date, "%a, %d %b %Y %X %Z", node.receive_date);
+                        } else if ( memcmp(buffer, "Expires: ", 9) == 0) {
+                            size_t date_len = strlen(buffer) + 1 - 9;
+                            char* date = malloc((date_len)*sizeof(char));
+                            *(date+date_len-1) = '\0';
+                            strncpy(date, buffer+9, date_len-1);
+                            node.expires_date = malloc(sizeof(struct tm));
+                            strptime(date, "%a, %d %b %Y %X %Z", node.expires_date);
+                        } else if ( memcmp(buffer, "Last-Modified: ", 15) == 0) {
+                            size_t date_len = strlen(buffer) + 1 - 15;
+                            char* date = malloc((date_len)*sizeof(char));
+                            *(date+date_len-1) = '\0';
+                            strncpy(date, buffer+15, date_len-1);
+                            node.modified_date = malloc(sizeof(struct tm));
+                            strptime(date, "%a, %d %b %Y %X %Z", node.modified_date);
+                        }
+                    }
+                }
+            }
+
+            // Clear buffer for the next loop
+            memset(&receive_buffer, 0, sizeof receive_buffer);
+            totalBytes += received_count;
+            if(received_count == 0) {
+                // EOF detected, data receive process is finished
+                break;
+            }
+        } else {
+            // TimeOut
+            break;
+        }
+    }
+
+    if (not_modified == 1) {
+        // CleanUp & Return
+        fprintf(stdout, "The page hasn't changed compared with cached version.\n");
+        fprintf(stdout, "Only need to refreshing Priority.\n");
+        cache[staledCacheIndex].priority = *LRU_counter;
+        *(LRU_counter) += 1;
+        close(socket_fd);
+        return 0;
+    } else {
+        // Check if this node is qualified to be stored
+        fprintf(stdout, "The page has changed compared with cached version.\n");
+        fprintf(stdout, "Processing updates on cached file.\n");
+
+        if(node.modified_date == NULL && node.expires_date == NULL) {
+            cacheRequired = 0;
+        } else {
+            cacheRequired = 1;
+        }
+        if(cacheRequired == 1) {
+            // Step 1: create the node
+            node.priority = *LRU_counter;
+            node.filename = concat_host_res(host, resource);
+            *(LRU_counter) += 1;
+            // Step 2: update node
+            cache[staledCacheIndex] = node;
+        } else {
+            // New node is not needed, so delete old stale node
+            cache[staledCacheIndex] = cache[(*valid_LRU_node_count-1)];
+            memset(&cache[(*valid_LRU_node_count-1)], 0, sizeof(cache[(*valid_LRU_node_count-1)]));
+            // Reduce valid_LRU_node_count by 1
+            *(valid_LRU_node_count) -= 1;
+        }
+    }
+
+    // closing
+    fprintf(stdout, "Successfully finished retrieving resource from host and updating cache respectively.\n");
+    close(read_fd);
+    close(socket_fd);
+
+    return 0;
+}
+
+
+
+
+
+
+
+
 
 // writen n chars to the socket
 ssize_t writen(int fd, void *vptr, size_t n)
@@ -327,8 +541,30 @@ char* concat_host_res(const char *host, const char *res)
     strcpy(result, host);
     strcat(result, "_");
     strcat(result, res);
+
+    for(int i=0; i<strlen(result); i++) {
+        if(*(result+i) == '/') {
+            *(result+i) = '_';
+        }
+    }
+
     return result;
 }
+
+char* replaceSlash(char* str)
+{
+    char *result = malloc(strlen(str)+1);   //+1 for the null-terminator
+    *(result+strlen(str)) = '\0';
+    for(int i=0; i<strlen(str); i++) {
+        if(*(str+i) == '/') {
+            *(result+i) = '_';
+        } else {
+            *(result+i) = *(str+i);
+        }
+    }
+    return result;
+}
+
 
 char* concat(const char *s1, const char *s2)
 {
