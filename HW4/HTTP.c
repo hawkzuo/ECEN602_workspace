@@ -72,7 +72,7 @@ int parseHTTPRequest(char buffer[], ssize_t message_len, char **host, char **res
  * @param LRU_counter               -Global Counter used for Priority Management
  * @param staledCacheIndex          -Indicate if this request is an update for a staled cache
  * @return	0 on success, -1 on getaddrinfo error, -2 on connect error,
- *          -3 on send error, -4 on file read error,
+ *          -3 on send error, -4 on file read error, 11 on do not store cache state
  */
 int receiveFromGET(char* host,
                    char* resource,
@@ -143,6 +143,7 @@ int receiveFromGET(char* host,
     int totalBytes = 0;                 // Used to identify header
     int cacheRequired = 0;              // Flag on cache storing
     struct LRU_node node;               // New LRU Node
+    memset(&node, 0, sizeof(struct LRU_node));
     struct timeval tv;                  // Timeout time_value
     tv.tv_sec = IDLETIME;
     tv.tv_usec = 0;
@@ -278,6 +279,11 @@ int receiveFromGET(char* host,
             *(valid_LRU_node_count) += 1;
         } else {
             // cache node does not require storing
+            fprintf(stdout, "The file received from server is not well-formatted.\n");
+            fprintf(stdout, "The Proxy will not store cache file for this request.\n");
+            close(read_fd);
+            close(socket_fd);
+            return 11;
         }
     }
     // closing

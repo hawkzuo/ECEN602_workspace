@@ -215,18 +215,22 @@ int main(int argc, char** argv)
                             break;
                         }
                     }
+                    int receiveFromGETFlag = 0;
                     // Not Cached locally, send GET request
                     if (cached == 0) {
-                        if(receiveFromGET(host, resource, cache, &valid_LRU_node_count, &global_LRU_priority_value, staledCacheIndex) < 0) {
+                        receiveFromGETFlag = receiveFromGET(host, resource, cache, &valid_LRU_node_count, &global_LRU_priority_value, staledCacheIndex);
+                        if(receiveFromGETFlag < 0) {
                             perror("Proxy: receiveGET");
                         }
-                        desiredNode = cache[valid_LRU_node_count-1];
+//                        desiredNode = cache[valid_LRU_node_count-1];
                     }
 
                     // open the file and send back
                     char fileBuffer[HTTPRECVBUFSIZE];
 
-                    int cached_file_fd = open(desiredNode.filename, O_RDONLY);
+                    // At this time, no matter read from cache or after sending GET request,
+                    // desiredCacheFilename should always be present at file system
+                    int cached_file_fd = open(desiredCacheFilename, O_RDONLY);
                     ssize_t file_read_count	= read(cached_file_fd, fileBuffer, HTTPRECVBUFSIZE);
                     if(file_read_count < 0) {
                         perror("Proxy: readCachedFile");
@@ -244,6 +248,13 @@ int main(int argc, char** argv)
                     }
                     // Close the cached file
                     close(cached_file_fd);
+
+                    // Check for "Proxy will not store cache" case
+                    if(receiveFromGETFlag == 11) {
+                        remove(desiredCacheFilename);
+                    }
+
+
                 }
                 // Clean Up resources on Server
 //                sleep(1);
