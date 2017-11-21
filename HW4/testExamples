@@ -3,12 +3,45 @@ Proxy:
 
 Client:
 Web pages:
+    ./client 0.0.0.0 7777 http://www.baidu.com/index.html
+
     ./client 0.0.0.0 7777 http://www.example.com/index.html
 
     ./client 0.0.0.0 7777 http://www.tamu.edu/index.html
 
+    ./client 0.0.0.0 7777 https://www.apple.com/index.html
+
+    ./client 0.0.0.0 7777 http://www.tamu.edu/about/index.html
+
+    ./client 0.0.0.0 7777 http://www.tamu.edu/admissions/index.html
+
+    ./client 0.0.0.0 7777 http://www.tamu.edu/academics/index.html
+
+    ./client 0.0.0.0 7777 http://www.tamu.edu/athletics/index.html
+
+    ./client 0.0.0.0 7777 http://www.tamu.edu/research/index.html
+
+    ./client 0.0.0.0 7777 http://www.tamu.edu/student-life/index.html
+
+
+
+----
+    ./client 0.0.0.0 7777 http://www.tamug.edu/admissions/index.html
+
+    ./client 0.0.0.0 7777 http://www.tamug.edu/academics/index.html
+
+Not Cached Files:
+    ./client 0.0.0.0 7777 https://fast-crag-31827.herokuapp.com/alg_questions.html
+
+    ./client 0.0.0.0 7777 https://fast-crag-31827.herokuapp.com/tags.html
+
+    ./client 0.0.0.0 7777 https://fast-crag-31827.herokuapp.com/companies.html
+
+    ./client 0.0.0.0 7777 https://docs.oracle.com/javase/8/docs/api/index.html
+
     ./client 0.0.0.0 7777 http://www.deepskyfrontier.com/index.html
         [This page has no cache required headers]
+
 
 General Files:
     ./client 0.0.0.0 7777 https://www.google.com/images/logo.png

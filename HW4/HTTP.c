@@ -71,6 +71,7 @@ int parseHTTPRequest(char buffer[], ssize_t message_len, char **host, char **res
  * @param valid_LRU_node_count		-Count of current valid LRU nodes
  * @param LRU_counter               -Global Counter used for Priority Management
  * @param staledCacheIndex          -Indicate if this request is an update for a staled cache
+ * @param max_cache                 -Max cache Override
  * @return	0 on success, -1 on getaddrinfo error, -2 on connect error,
  *          -3 on send error, -4 on file read error, 11 on do not store cache state
  */
@@ -79,7 +80,8 @@ int receiveFromGET(char* host,
                    struct LRU_node cache[MAXUSERCOUNT],
                    int* valid_LRU_node_count,
                    int64_t* LRU_counter,
-                   int staledCacheIndex)
+                   int staledCacheIndex,
+                   int* max_cache)
 {
     // Initial some useful variables
     struct addrinfo hints, *serverinfo, *p;
@@ -87,6 +89,7 @@ int receiveFromGET(char* host,
     ssize_t received_count;
     int socket_fd = -1;
     char receive_buffer[HTTPRECVBUFSIZE];
+    memset(&receive_buffer, 0, sizeof(receive_buffer));
 
     // Generate GET request body
     char httpMessage[128];
@@ -244,16 +247,25 @@ int receiveFromGET(char* host,
             *(valid_LRU_node_count) -= 1;
         }
     } else {
-        if(*valid_LRU_node_count == MAXCACHECOUNT && cacheRequired == 1) {
+
+        int maxCacheUsers;
+        if( max_cache != NULL ) {
+            maxCacheUsers = *max_cache;
+        } else {
+            maxCacheUsers = MAXCACHECOUNT;
+        }
+
+        if(*valid_LRU_node_count == maxCacheUsers && cacheRequired == 1) {
             // Imp LRU shifting
             // Find the lowest priority one and replace it. RT: O(n)
 
             // Step1: Find the lowest priority node
             int64_t leastPriorityIndex = 0;
             int64_t leastPriorityValue = cache[0].priority;
-            for(int i=1; i<MAXCACHECOUNT; i++) {
+            for(int i=1; i<maxCacheUsers; i++) {
                 if(cache[i].priority < leastPriorityValue) {
                     leastPriorityIndex = i;
+                    leastPriorityValue = cache[i].priority;
                 }
             }
 

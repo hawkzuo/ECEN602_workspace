@@ -25,10 +25,11 @@
 #define MAXUSERCOUNT 15
 #define HTTPRECVBUFSIZE 512
 #define IDLETIME 1
-#define MAXCACHECOUNT 2
+#define MAXCACHECOUNT 10
 #define ONEDAY 86400
 #define ONEMONTH 2678400
 
+//int MAXCACHECOUNT = 6;
 
 static char* HTTPPORT = "80";
 
@@ -42,7 +43,7 @@ struct LRU_node {
 
 int buildHTTPRequest(char** message, int* message_count,char* rawInput);
 int parseHTTPRequest(char buffer[], ssize_t message_len, char **host, char **resource);
-int receiveFromGET(char* host, char* resource, struct LRU_node cache[MAXUSERCOUNT], int* valid_LRU_node_count, int64_t* LRU_counter, int staledCacheIndex);
+int receiveFromGET(char* host, char* resource, struct LRU_node cache[MAXUSERCOUNT], int* valid_LRU_node_count, int64_t* LRU_counter, int staledCacheIndex, int* max_cache);
 int receiveFromGETBONUS(char* host,
                         char* resource,
                         struct LRU_node cache[MAXUSERCOUNT],

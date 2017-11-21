@@ -69,16 +69,6 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    int max_user = atoi(argv[3]);
-
-    if(max_user > MAXUSERCOUNT - 1) {
-        printf("The server can only support at most %d users. Please reenter the user count.\n", MAXUSERCOUNT-1);
-        exit(10);
-    }
-
-    printf("Maximum number of user: %d. \n", max_user);
-
-
     // loop through all the results and bind to the first we can
     for(p = servinfo; p != NULL; p = p->ai_next) {
         listener = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
@@ -118,9 +108,20 @@ int main(int argc, char** argv)
     // keep track of the biggest file descriptor
     fdmax = listener; // so far, it's this one
 
+    int* max_cache = malloc(sizeof(int));
+
     // Basic Prompt:
-    printf("Server started, Proxy is open.\n");
-    fprintf(stdout, "Maximum cache file count is: %d\n", MAXCACHECOUNT);
+    if(argc == 4) {
+        *max_cache = atoi(argv[3]);
+//        MAXCACHECOUNT = max_cache;
+        printf("Server started, Proxy is open.\n");
+        fprintf(stdout, "Maximum cache file count is: %d\n\n", *max_cache);
+    } else {
+        max_cache = NULL;
+        printf("Server started, Proxy is open.\n");
+        fprintf(stdout, "Maximum cache file count is: %d\n\n", MAXCACHECOUNT);
+    }
+
 
 
     memset(&buf, 0, sizeof buf);
@@ -214,7 +215,7 @@ int main(int argc, char** argv)
                     int receiveFromGETFlag = 0;
                     // Not Cached locally, send GET request
                     if (cached == 0) {
-                        receiveFromGETFlag = receiveFromGET(host, resource, cache, &valid_LRU_node_count, &global_LRU_priority_value, staledCacheIndex);
+                        receiveFromGETFlag = receiveFromGET(host, resource, cache, &valid_LRU_node_count, &global_LRU_priority_value, staledCacheIndex, max_cache);
                         if(receiveFromGETFlag < 0) {
                             perror("Proxy: receiveGET");
                         }

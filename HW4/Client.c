@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
         exit(1);
     } else  {
         username = argv[1];
-        printf("User name is %s\n", username);
+//        printf("User name is %s\n", username);
     }
 
     /* IP searching process */
@@ -141,9 +141,12 @@ int main(int argc, char *argv[])
 //  Client side 'select' is not needed
     time_t curtime;
     time(&curtime);
+    char time_string[100];
+    strftime(time_string, 100, "%d_%b_%Y_%H:%M:%S_GMT", gmtime(&curtime));
+
     char filename[128];
     memset(&filename, 0, sizeof(filename));
-    sprintf(filename,"%ld_%s",curtime, replaceSlash(argv[3]));
+    sprintf(filename,"%s_%s", time_string, replaceSlash(argv[3]));
 
     int read_fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
     if(read_fd == -1) {
@@ -156,7 +159,7 @@ int main(int argc, char *argv[])
             if(received_count < 0) {
                 perror("client: recv");
             } else {
-                printf("Server closed connection. Program will end.\n");
+                printf("Server closed connection. Program will end.");
                 break;
             }
         }

@@ -55,8 +55,8 @@ int main(int argc, char** argv)
     FD_ZERO(&read_fds);
 
     /*	This part checks the input format and record the assigned port number		*/
-    if(argc != 4) {
-        fprintf(stderr, "Number of arguments error, expected: 4, got: %d\n", argc);
+    if(argc != 4 && argc != 3) {
+        fprintf(stderr, "Number of arguments error, expected: 3 or 4, got: %d\n", argc);
         exit(1);
     }
 
@@ -70,16 +70,6 @@ int main(int argc, char** argv)
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
-
-    int max_user = atoi(argv[3]);
-
-    if(max_user > MAXUSERCOUNT - 1) {
-        printf("The server can only support at most %d users. Please reenter the user count.\n", MAXUSERCOUNT-1);
-        exit(10);
-    }
-
-    printf("Maximum number of user: %d. \n", max_user);
-
 
     // loop through all the results and bind to the first we can
     for(p = servinfo; p != NULL; p = p->ai_next) {
@@ -120,9 +110,21 @@ int main(int argc, char** argv)
     // keep track of the biggest file descriptor
     fdmax = listener; // so far, it's this one
 
+    int* max_cache = malloc(sizeof(int));
+
     // Basic Prompt:
-    printf("Server started, Proxy is open.\n");
-    fprintf(stdout, "Maximum cache file count is: %d\n\n", MAXCACHECOUNT);
+    if(argc == 4) {
+        *max_cache = atoi(argv[3]);
+//        MAXCACHECOUNT = max_cache;
+        printf("Server started, Proxy is open.\n");
+        fprintf(stdout, "Maximum cache file count is: %d\n\n", *max_cache);
+    } else {
+        max_cache = NULL;
+        printf("Server started, Proxy is open.\n");
+        fprintf(stdout, "Maximum cache file count is: %d\n\n", MAXCACHECOUNT);
+    }
+
+
 
 
     memset(&buf, 0, sizeof buf);
@@ -150,6 +152,7 @@ int main(int argc, char** argv)
 //                printf("Proxy: new connection from %s on socket %d\n",
 //                       inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr *) &remoteaddr), remoteIP, INET6_ADDRSTRLEN), newfd);
             }
+            continue;
         }
 
         // run through the existing connections looking for data to read
@@ -163,7 +166,7 @@ int main(int argc, char** argv)
                     if(received_count < 0) {
                         perror("Proxy: recvFromClient");
                     }
-                } else if(newfd == i) {
+                } else if(newfd > -1) {
                     // Version 1: Send GET request & receive data
                     char* host;
                     char* resource;
@@ -213,10 +216,10 @@ int main(int argc, char** argv)
                                 // Assign Expires / Date to query_time
                                 if(cache[k].expires_date != NULL) {
                                     query_time = cache[k].expires_date;
-                                } else if(cache[k].receive_date != NULL) {
-                                    query_time = cache[k].receive_date;
                                 } else if(cache[k].modified_date != NULL) {
                                     query_time = cache[k].modified_date;
+                                } else if(cache[k].receive_date != NULL) {
+                                    query_time = cache[k].receive_date;
                                 }
 
                             }
@@ -240,7 +243,8 @@ int main(int argc, char** argv)
                                                                 cache,
                                                                 &valid_LRU_node_count,
                                                                 &global_LRU_priority_value,
-                                                                staledCacheIndex);
+                                                                staledCacheIndex,
+                                                                max_cache);
                         }
 
                         if(receiveFromGETFlag < 0) {
@@ -262,7 +266,7 @@ int main(int argc, char** argv)
                         perror("Proxy: readCachedFile");
                     }
                     while(file_read_count >= 0 ) {
-                        ssize_t send_count = writen(newfd, fileBuffer, file_read_count);
+                        ssize_t send_count = writen(i, fileBuffer, file_read_count);
                         if(send_count < 0) {
                             perror("Proxy: writenToClient");
                         }
@@ -282,7 +286,7 @@ int main(int argc, char** argv)
                 }
                 // Clean Up resources on Server
                 fprintf(stdout, "Finished sending file to the client.\nCurrent cache count is:\t%d\nWill close connection.\n\n", valid_LRU_node_count);
-                sleep(1);
+//                sleep(1);
                 close(i); // bye!
                 FD_CLR(i, &master); // remove from master set
 //                printf("Proxy: finished sending file and closed connection on socket %d\n\n", i);
