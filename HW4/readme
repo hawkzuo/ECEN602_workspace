@@ -1,1 +1,11 @@
+This assignment implements a simple HTTP proxy server and HTTP command line client.
+
+Team role:
+Jianyu Zuo implements the proxy server program. Jimin Wen implements the client and testing.
+
+Usage:
+run make command to launch makefile generating executable file for the server. run make clean to remove all the 
+generated files from the directory. 
+To launch the client. The running command follows the pattern: ./proxy 0.0.0.0 7777 10
+To launch the server. The running command follows the pattern: ./client 0.0.0.0 7777 http://www.baidu.com/index.html
 
